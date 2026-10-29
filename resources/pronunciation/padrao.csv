@@ -1,0 +1,188 @@
+termo,pronuncia,diferenciar_maiusculas
+TCP/IP,tê cê pê í pê,sim
+e-mail,i-meil,nao
+e-mails,i-meils,nao
+Wi-Fi,uai-fai,nao
+online,onlaine,nao
+offline,ófilaine,nao
+software,sófitiuer,nao
+hardware,rárduer,nao
+download,daunloud,nao
+upload,aploud,nao
+site,saite,nao
+sites,saites,nao
+Python,páiton,sim
+Java,java,sim
+Windows,uíndous,sim
+Word,uórd,sim
+Excel,ecsél,sim
+USP,usp,sim
+UNICAMP,unicamp,sim
+UNESP,unésp,sim
+MEC,méqui,sim
+CEP,cépi,sim
+SESC,sésqui,sim
+SENAC,senáqui,sim
+SAC,sáqui,sim
+INMETRO,inmetro,sim
+FUVEST,fuvést,sim
+CNPq,cê ene pê quê,sim
+CNPJ,cê ene pê jota,sim
+CPF,cê pê éfe,sim
+RG,érre gê,sim
+OAB,ó á bê,sim
+SUS,sus,sim
+INSS,í ene ésse ésse,sim
+LGPD,éle gê pê dê,sim
+TI,tê í,sim
+RH,érre agá,sim
+IA,í á,sim
+EAD,é á dê,sim
+PDF,pê dê éfe,sim
+API,á pê í,sim
+APIs,á pê ís,sim
+IA,í á,sim
+LLM,éle éle ême,sim
+LLMs,éle éle êmes,sim
+JWT,jota dáblio tê,sim
+OAuth,ó áuti,sim
+OpenID Connect,ôupen ái dí conécti,nao
+OpenAPI,ôupen á pê í,nao
+GraphQL,gréfi quiú éle,nao
+SQL,ésse quê éle,sim
+NoSQL,nou ésse quê éle,nao
+GROUP BY,grúpi bai,nao
+ORDER BY,órder bai,nao
+SELECT,silécti,nao
+FROM,fróm,sim
+WHERE,uér,sim
+HAVING,révin,nao
+JOIN,djóin,nao
+INNER,íner,sim
+LEFT,léfti,sim
+RIGHT,ráiti,sim
+NULL,nâu,nao
+COUNT,cáunti,nao
+DISTINCT,distínkti,nao
+INSERT,insérti,nao
+UPDATE,ápdeiti,nao
+DELETE,dilíti,nao
+CREATE,criêiti,sim
+TABLE,têibol,sim
+COMMIT,comíti,nao
+ROLLBACK,rôl béqui,nao
+TRIGGER,trígguer,nao
+VIEW,víu,sim
+primary key,práimari quí,nao
+foreign key,fórin quí,nao
+DevOps,dévópis,nao
+DevSecOps,dév séc ópis,nao
+Git,guíti,sim
+GitHub,guíti râbi,nao
+GitLab,guíti lébi,nao
+Docker,dóquer,nao
+Kubernetes,cubernétis,nao
+Linux,línucs,nao
+JavaScript,djáva scrípti,nao
+TypeScript,táipi scrípti,nao
+React,riécti,sim
+Node,nôudi,sim
+Scrum,scrâm,nao
+sprint,sprínti,nao
+sprints,sprínts,nao
+backlog,béquilógui,nao
+Kanban,canban,nao
+XP,écs pê,sim
+TDD,tê dê dê,sim
+SOLID,sólid,sim
+DRY,drái,sim
+KISS,quíss,sim
+framework,fréimuorqui,nao
+frameworks,fréimuorquis,nao
+backend,béqui ênd,nao
+back-end,béqui ênd,nao
+frontend,frônti ênd,nao
+front-end,frônti ênd,nao
+pipeline,páipi láin,nao
+pipelines,páipi láins,nao
+deploy,diplói,nao
+deployment,diplóimenti,nao
+rollback,rôl béqui,nao
+rolling,rôulin,nao
+feedback,fídi béqui,nao
+readiness,rédinés,nao
+liveness,láivinés,nao
+staging,stêidjin,nao
+branch,bréntch,nao
+branching,bréntchin,nao
+merge,mârdj,nao
+container,contêiner,nao
+containers,contêiners,nao
+cluster,clâster,nao
+clustering,clâsterin,nao
+cloud,cláudi,nao
+scaling,squêilin,nao
+service,sérvis,nao
+server,sérver,nao
+firewall,fáier uól,nao
+endpoint,ênd póinti,nao
+payload,pêi lôudi,nao
+cache,quéchi,nao
+phishing,fíxin,nao
+smishing,smíxin,nao
+vishing,víxin,nao
+whaling,uêilin,nao
+tailgating,têil guêitin,nao
+malware,máu uér,nao
+ransomware,rânsom uér,nao
+spyware,spái uér,nao
+hardening,rárdenin,nao
+Zero Trust,zírou trâsti,nao
+machine learning,machín lârnin,nao
+deep learning,díp lârnin,nao
+overfitting,ôuver fítin,nao
+underfitting,ânder fítin,nao
+embedding,embédin,nao
+embeddings,embédins,nao
+chunking,tchânquin,nao
+reranking,ri rênquin,nao
+prompt,prómpti,nao
+prompts,prómptis,nao
+prompting,prómptin,nao
+token,tôuquen,nao
+tokens,tôuquens,nao
+injection,indjécchon,nao
+observer,obzérver,nao
+mocking,móquin,nao
+thrashing,tréxin,nao
+starvation,starvêichon,nao
+aging,êidjin,nao
+journaling,djârnalin,nao
+parsing,pársin,nao
+brainstorming,brêin stórmin,nao
+retrospective,retrospéctiv,nao
+ITIL,ítil,sim
+COBIT,cóbit,sim
+PMBOK,pêmbóqui,sim
+SLA,ésse éle á,sim
+SLO,ésse éle ó,sim
+SRE,ésse érre é,sim
+RAG,rég,sim
+MCP,ême cê pê,sim
+TCE-GO,tê cê é goiás,sim
+TCE GO,tê cê é goiás,sim
+TCE,tê cê é,sim
+AAAA-MM-DD,ano mês e dia,sim
+DD/MM/AAAA,dia mês e ano,sim
+ALTER,ólter,sim
+GRANT,grénti,sim
+REVOKE,rivôuqui,sim
+VALUES,váliuz,sim
+LIKE,láiqui,sim
+BETWEEN,bituín,sim
+EXISTS,eguizísts,sim
+UNION,iúnion,sim
+SAVEPOINT,sêiv póinti,sim
+COALESCE,côu alés,sim
+FIFO,fáifou,sim
+LIFO,láifou,sim

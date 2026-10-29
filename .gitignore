@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+.venv/
+# Ambiente separado da clonagem de voz (PyTorch, varios GB)
+.venv-clonagem/
+*.egg-info/
+.pytest_cache/
+
+build/
+dist/
+
+data/*
+!data/.gitkeep
+output/*
+!output/.gitkeep
+
+# Modelos de voz e binarios sao baixados por scripts, nao versionados
+resources/voices/*
+!resources/voices/.gitkeep
+resources/bin/*
+!resources/bin/.gitkeep
+
+# Documentos reais do corpus nao sao versionados, apenas as referencias
+tests/corpus/reais/*
+!tests/corpus/reais/*.esperado.json
+!tests/corpus/reais/LEIA-ME.md
+
+# Dados de OCR sao baixados, nao versionados
+resources/tessdata/*
+
+# Documentos do usuario para avaliar a leitura
+docs texte/
+resources/tessdata_best/*
