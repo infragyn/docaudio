@@ -151,7 +151,8 @@ class LanguagesDialog(QDialog):
             return label
         button = QPushButton("Baixar")
         button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowDown))
-        button.clicked.connect(download)
+        # `clicked` envia `checked`; sem isso, ele tomaria o lugar do argumento padrao de `download`.
+        button.clicked.connect(lambda _checked=False: download())
         return button
 
     # ---- downloads --------------------------------------------------------------
@@ -172,7 +173,7 @@ class LanguagesDialog(QDialog):
 
         def done(_value) -> None:
             self._workers.discard(worker)
-            self._set_status(f"{title[:1].upper()}{title[1:]} instalado.", "success")
+            self._set_status(f"Instalado: {title}.", "success")
             log.info("Instalado: %s", title)
             self.on_changed()
             self._build()

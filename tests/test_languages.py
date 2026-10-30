@@ -91,3 +91,41 @@ def test_fila_usa_a_voz_do_idioma_de_cada_documento(tmp_path):
     )
     worker.run()
     assert used[0] == "en-voz" and "pt-voz" in used and used[-1] == "voz-original"
+
+
+def test_cada_botao_baixar_recebe_o_que_deve_baixar(monkeypatch):
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets")
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    from docaudio.core import translation
+    from docaudio.core.language import LANGUAGES
+    from docaudio.speech import voice_download
+    from docaudio.ui.languages_dialog import LanguagesDialog
+
+    calls = []
+    monkeypatch.setattr(voice_download, "download_voice", lambda voice, *rest: calls.append(("voz", voice)))
+    monkeypatch.setattr(voice_download, "download_tessdata", lambda language, *rest: calls.append(("ocr", language)))
+    monkeypatch.setattr(translation, "download", lambda src, dst, *rest: calls.append(("traducao", src, dst)))
+    monkeypatch.setattr(translation, "is_installed", lambda src, dst: False)
+
+    class Provider:
+        def list_voices(self):
+            return []
+
+    dialog = LanguagesDialog(Provider(), Settings(), lambda: None)
+    dialog._build = lambda: None  # mantem os mesmos botoes entre um clique e outro
+    buttons = [b for b in dialog.findChildren(QtWidgets.QPushButton) if b.text() == "Baixar"]
+    for button in buttons:
+        button.click()
+        while dialog._workers:
+            app.processEvents()
+        assert dialog.status.text().startswith("Instalado:"), dialog.status.text()
+    dialog.close()
+
+    voices = {("voz", v[0]) for language in LANGUAGES for v in voice_download.PIPER_CATALOG.get(language, [])}
+    assert voices <= set(calls)
+    assert {c[1:] for c in calls if c[0] == "traducao"} == set(translation.pairs())
+    assert {c[1] for c in calls if c[0] == "ocr"} <= set(LANGUAGES) and any(c[0] == "ocr" for c in calls)
