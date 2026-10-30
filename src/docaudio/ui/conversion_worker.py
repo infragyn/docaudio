@@ -30,6 +30,8 @@ class QueueItem:
     key: str
     document: Document | None
     settings: Settings
+    # False quando a voz ja foi escolhida (ex.: retomar com a voz da conversao original).
+    pick_voice: bool = True
 
 
 class ConversionSignals(QObject):
@@ -86,11 +88,15 @@ class ConversionWorker(QRunnable):
             self.signals.document_started.emit(item.key)
             try:
                 document = item.document or load_document(Path(item.key), item.settings)
+                settings = item.settings
+                if item.document is None and item.pick_voice:
+                    # Lido agora: so aqui se sabe o idioma, e com ele a voz.
+                    settings = settings.for_language(document.language)
 
                 def report(progress: Progress, index=index) -> None:
                     self.signals.progress.emit(index, len(self.queue), progress)
 
-                job = ConversionJob(document, item.settings, self.provider, dictionary, report, self.cancel)
+                job = ConversionJob(document, settings, self.provider, dictionary, report, self.cancel)
                 self.signals.document_done.emit(item.key, job.run())
             except Cancelled:
                 cancelled = True

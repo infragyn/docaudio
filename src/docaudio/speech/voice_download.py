@@ -29,6 +29,35 @@ def voice_urls(voice_id: str) -> dict[str, str]:
     }
 
 
+# Vozes Piper oferecidas em "Idiomas e vozes": (id, nome, tipo, tamanho aproximado em MB).
+PIPER_CATALOG = {
+    "en": [
+        ("en_US-lessac-medium", "Lessac (EUA)", "feminina", 63),
+        ("en_US-amy-medium", "Amy (EUA)", "feminina", 63),
+        ("en_US-ryan-medium", "Ryan (EUA)", "masculina", 63),
+        ("en_GB-alba-medium", "Alba (Reino Unido)", "feminina", 63),
+        ("en_GB-alan-medium", "Alan (Reino Unido)", "masculina", 63),
+    ],
+    "es": [
+        ("es_ES-davefx-medium", "Davefx (Espanha)", "masculina", 63),
+        ("es_ES-sharvard-medium", "Sharvard (Espanha)", "masculina", 77),
+        ("es_MX-claude-high", "Claude (México)", "feminina", 114),
+        ("es_MX-ald-medium", "Ald (México)", "masculina", 63),
+    ],
+}
+
+# Dados de OCR (Tesseract, modelos "fast"): codigo do idioma do DocAudio -> codigo do Tesseract.
+TESSERACT_CODES = {"pt": "por", "en": "eng", "es": "spa"}
+TESSDATA_URL = "https://github.com/tesseract-ocr/tessdata_fast/raw/main/{code}.traineddata"
+
+
+def download_tessdata(language: str, dest_dir: Path, progress: ProgressCallback | None = None) -> Path:
+    """Baixa o OCR de um idioma para dest_dir (ex.: dados/tessdata/eng.traineddata)."""
+    code = TESSERACT_CODES[language]
+    _download({f"{code}.traineddata": TESSDATA_URL.format(code=code)}, dest_dir, progress)
+    return dest_dir / f"{code}.traineddata"
+
+
 KOKORO_ID = "kokoro"
 KOKORO_BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 

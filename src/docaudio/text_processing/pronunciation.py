@@ -109,24 +109,76 @@ def save_user_entry(term: str, spoken: str, case_sensitive: bool = False) -> Pat
     term, spoken = term.strip(), spoken.strip()
     if not term or not spoken:
         raise ValueError("Informe o termo e como ele deve ser falado.")
+    path = save_user_entries([Entry(term, spoken, case_sensitive)])
+    log.info("Pronúncia salva: %s → %s", term, spoken)
+    return path
+
+
+def save_user_entries(entries: list[Entry]) -> Path:
+    """Grava varios termos de uma vez; um termo que ja existe e trocado pela versao nova."""
     path = ensure_user_dictionary()
     with path.open(encoding="utf-8-sig", newline="") as handle:
         rows = [row for row in csv.reader(handle) if row]
-    same = (lambda t: t == term) if case_sensitive else (lambda t: t.lower() == term.lower())
-    body = [row for row in rows[1:] if not same(row[0].strip())]
-    body.append([term, spoken, "sim" if case_sensitive else "não"])
+
+    def key(term: str, case_sensitive: bool) -> tuple[str, bool]:
+        return (term if case_sensitive else term.lower(), case_sensitive)
+
+    replaced = {key(e.term, e.case_sensitive) for e in entries}
+    body = []
+    for row in rows[1:]:
+        flag = len(row) > 2 and row[2].strip().lower() in TRUE_VALUES
+        if key(row[0].strip(), flag) not in replaced:
+            body.append(row)
+    body += [[e.term, e.spoken, "sim" if e.case_sensitive else "não"] for e in entries]
     tmp = path.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(HEADER)
         writer.writerows(body)
     tmp.replace(path)
-    log.info("Pronúncia salva: %s → %s", term, spoken)
     return path
 
 
-def load_default() -> PronunciationDictionary:
-    """Dicionario padrao do pacote mais o do usuario (que tem prioridade)."""
+# Dicionarios tematicos em resources/pronunciation/temas/<nome>.csv.
+THEMES = {
+    "ti": "Tecnologia da informação",
+    "direito": "Direito",
+    "latim": "Latim jurídico",
+    "administracao_publica": "Administração pública e órgãos",
+    "contabilidade": "Contabilidade e tributos",
+    "saude": "Saúde",
+}
+# Temas ligados (Ferramentas > Dicionários temáticos); None = todos.
+_themes: set[str] | None = None
+
+
+def set_themes(names: list[str] | None) -> None:
+    global _themes
+    _themes = None if names is None else set(names)
+
+
+def theme_file(name: str) -> Path:
+    return paths.resources_dir() / "pronunciation" / "temas" / f"{name}.csv"
+
+
+def user_dictionary_for(language: str) -> Path:
+    """Portugues usa pronuncia_usuario.csv; ingles e espanhol tem arquivos proprios."""
+    if language == "pt":
+        return user_dictionary_file()
+    return paths.data_dir() / f"pronuncia_usuario_{language}.csv"
+
+
+def load_default(language: str = "pt") -> PronunciationDictionary:
+    """Dicionario padrao, temas ligados e, por ultimo (com prioridade), o do usuario.
+
+    Os dicionarios do pacote sao de portugues; em outro idioma vale o do pacote
+    para esse idioma (se houver) e o do usuario para esse idioma.
+    """
+    if language != "pt":
+        return PronunciationDictionary.from_csv(
+            paths.resources_dir() / "pronunciation" / f"{language}.csv", user_dictionary_for(language)
+        )
+    themes = [theme_file(name) for name in THEMES if _themes is None or name in _themes]
     return PronunciationDictionary.from_csv(
-        paths.resources_dir() / "pronunciation" / DEFAULT_FILE, user_dictionary_file()
+        paths.resources_dir() / "pronunciation" / DEFAULT_FILE, *themes, user_dictionary_file()
     )

@@ -9,7 +9,18 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PySide6.QtWidgets import QApplication, QSplashScreen, QStyleFactory, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QSplashScreen,
+    QStyleFactory,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 @dataclass(frozen=True)
@@ -29,19 +40,22 @@ class Tokens:
     error_bg: str
     error_text: str
     ocr_highlight: str
+    success_bg: str
+    success_text: str
+    info_bg: str
 
 
 LIGHT = Tokens(
     window="#f3f5f8", surface="#ffffff", surface_alt="#f8f9fb", border="#d9dee5", text="#1f2328",
     muted="#5f6b7a", accent="#2563eb", accent_hover="#1d4ed8", accent_text="#ffffff", selection="#dbe7fd",
     warning_bg="#fff4ce", warning_text="#5c4400", error_bg="#fde2e1", error_text="#7a1c16",
-    ocr_highlight="#fff1b8",
+    ocr_highlight="#fff1b8", success_bg="#dcf5e3", success_text="#14532d", info_bg="#e8f0fe",
 )
 DARK = Tokens(
     window="#1b1d21", surface="#24272c", surface_alt="#2b2f35", border="#3a3f47", text="#e6e8eb",
     muted="#9aa4b1", accent="#4f8cff", accent_hover="#6a9dff", accent_text="#0b1220", selection="#2c4370",
     warning_bg="#4a3b0f", warning_text="#ffe08a", error_bg="#4d1f1c", error_text="#ffb4ab",
-    ocr_highlight="#5a4a12",
+    ocr_highlight="#5a4a12", success_bg="#173d26", success_text="#a7f3c0", info_bg="#1f2c45",
 )
 
 _current = LIGHT
@@ -209,7 +223,82 @@ def stylesheet(t: Tokens) -> str:
     }}
     QLabel[role="muted"] {{ color: {t.muted}; }}
     QLabel[role="title"] {{ font-size: 13pt; font-weight: 600; }}
+    QLabel[role="subtitle"] {{ color: {t.muted}; }}
+    QLabel[role="step"] {{ color: {t.accent}; font-weight: 600; }}
+    QLabel[role="info"] {{ background: {t.info_bg}; color: {t.text}; border-radius: 8px; padding: 8px 10px; }}
+    QLabel[role="success"] {{
+        background: {t.success_bg}; color: {t.success_text}; border-radius: 8px; padding: 8px 10px;
+    }}
+    QDialog QFrame[role="header"] {{ background: {t.surface}; border: none; border-bottom: 1px solid {t.border}; }}
+    QFrame[role="card"] {{ background: {t.surface}; border: 1px solid {t.border}; border-radius: 10px; }}
+    QTableView {{
+        background: {t.surface}; alternate-background-color: {t.surface_alt}; border: 1px solid {t.border};
+        border-radius: 8px; gridline-color: transparent; selection-background-color: {t.selection};
+        selection-color: {t.text}; outline: none;
+    }}
+    QTableView::item {{ padding: 4px 8px; border: none; }}
+    QHeaderView::section {{
+        background: {t.surface_alt}; color: {t.muted}; border: none; border-bottom: 1px solid {t.border};
+        padding: 6px 8px; font-weight: 600;
+    }}
+    QTableCornerButton::section {{ background: {t.surface_alt}; border: none; }}
     """
+
+
+def dialog_body(dialog: QDialog, title: str, subtitle: str = "", icon: QIcon | None = None) -> QVBoxLayout:
+    """Monta o padrao das sub-telas: cabecalho com icone, titulo e subtitulo; devolve o corpo."""
+    root = QVBoxLayout(dialog)
+    root.setContentsMargins(0, 0, 0, 0)
+    root.setSpacing(0)
+    header = QFrame()
+    set_role(header, "header")
+    row = QHBoxLayout(header)
+    row.setContentsMargins(18, 14, 18, 14)
+    row.setSpacing(14)
+    picture = QLabel()
+    picture.setPixmap((icon or app_icon()).pixmap(40, 40))
+    picture.setFixedSize(40, 40)
+    row.addWidget(picture, 0, Qt.AlignmentFlag.AlignTop)
+    texts = QVBoxLayout()
+    texts.setSpacing(2)
+    heading = QLabel(title)
+    set_role(heading, "title")
+    texts.addWidget(heading)
+    if subtitle:
+        detail = QLabel(subtitle)
+        detail.setWordWrap(True)
+        set_role(detail, "subtitle")
+        texts.addWidget(detail)
+    row.addLayout(texts, 1)
+    root.addWidget(header)
+    body = QVBoxLayout()
+    body.setContentsMargins(18, 14, 18, 16)
+    body.setSpacing(12)
+    root.addLayout(body, 1)
+    return body
+
+
+def card(step: str = "") -> tuple[QFrame, QVBoxLayout]:
+    """Cartao branco com borda arredondada; `step` vira um rotulo de etapa no topo."""
+    frame = QFrame()
+    set_role(frame, "card")
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(14, 12, 14, 12)
+    layout.setSpacing(8)
+    if step:
+        label = QLabel(step)
+        set_role(label, "step")
+        layout.addWidget(label)
+    return frame, layout
+
+
+def style_table(table: QTableView) -> None:
+    table.setAlternatingRowColors(True)
+    table.setShowGrid(False)
+    table.verticalHeader().setVisible(False)
+    table.verticalHeader().setDefaultSectionSize(30)
+    table.horizontalHeader().setHighlightSections(False)
+    table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
 
 def set_role(widget: QWidget, role: str) -> None:

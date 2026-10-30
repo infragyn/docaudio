@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from docaudio.core.editing import apply_chapter_text
+from docaudio.core.language import LANGUAGES
 from docaudio.core.loader import estimated_seconds, format_duration
 from docaudio.core.model import Chapter, Document
 from docaudio.core.study import answer_key, study_chapter
@@ -59,6 +61,9 @@ class PreviewPanel(QGroupBox):
     listen_requested = Signal(str, bool)
     pronunciation_requested = Signal(str)
     review_requested = Signal()
+    # idioma de destino, bilingue
+    translate_requested = Signal(str, bool)
+    restore_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Prévia", parent)
@@ -88,7 +93,15 @@ class PreviewPanel(QGroupBox):
             "Lista siglas, palavras estrangeiras e nomes técnicos deste documento para ouvir e corrigir antes de converter."
         )
         self.review_button.clicked.connect(self.review_requested)
+        self.translate_button = QPushButton("Traduzir")
+        self.translate_button.setToolTip(
+            "Traduz o documento (offline) para ouvir em outro idioma; o original fica guardado."
+        )
+        self.translate_menu = QMenu(self.translate_button)
+        self.translate_menu.aboutToShow.connect(self._fill_translate_menu)
+        self.translate_button.setMenu(self.translate_menu)
         header.addWidget(self.summary, 1)
+        header.addWidget(self.translate_button, 0, Qt.AlignmentFlag.AlignTop)
         header.addWidget(self.review_button, 0, Qt.AlignmentFlag.AlignTop)
         header.addWidget(self.reload_button, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(header)
@@ -172,7 +185,9 @@ class PreviewPanel(QGroupBox):
 
         has_document = document is not None
         self.reload_button.setEnabled(has_document)
-        self.review_button.setEnabled(bool(document and document.chapters))
+        self.translate_button.setEnabled(bool(document and document.chapters))
+        # A revisao procura termos estranhos ao portugues: nao faz sentido em outro idioma.
+        self.review_button.setEnabled(bool(document and document.chapters and document.language == "pt"))
         self._update_read_only()
         self.warnings.setText("\n".join(document.warnings) if document else "")
         self.warnings.setVisible(bool(document and document.warnings))
@@ -210,12 +225,15 @@ class PreviewPanel(QGroupBox):
         if not chapter:
             text = ""
         elif self.spoken_view.isChecked():
-            self._dictionary = self._dictionary or load_default()
+            language = self.document.language
+            dictionary = self._dictionary if language == "pt" and self._dictionary else load_default(language)
+            if language == "pt":
+                self._dictionary = dictionary
             if self.study_think_ms is not None:
-                chapter = study_chapter(chapter, answer_key(self.document), self.study_think_ms)
-            parts = [normalize(chapter.title, self._dictionary)]
+                chapter = study_chapter(chapter, answer_key(self.document), self.study_think_ms, language)
+            parts = [normalize(chapter.title, dictionary, language)]
             for block in chapter.included_blocks():
-                parts.append(normalize(block.text, self._dictionary))
+                parts.append(normalize(block.text, dictionary, language))
                 if block.pause_after_ms and block.pause_after_ms >= 1000:
                     parts.append(f"[pausa de {block.pause_after_ms // 1000} s para pensar]")
             text = "\n\n".join(parts)
@@ -285,6 +303,25 @@ class PreviewPanel(QGroupBox):
         if term := self.selected_term():
             self.pronunciation_requested.emit(term)
 
+    def _fill_translate_menu(self) -> None:
+        self.translate_menu.clear()
+        document = self.document
+        if document is None:
+            return
+        original = document.translated_from or document.language
+        for code, name in LANGUAGES.items():
+            if code == original:
+                continue
+            plain = self.translate_menu.addAction(f"Para {name.lower()}")
+            plain.triggered.connect(lambda _=False, c=code: self.translate_requested.emit(c, False))
+            both = self.translate_menu.addAction(f"Para {name.lower()} — bilíngue (original e tradução)")
+            both.setToolTip("Cada parágrafo no original, com a voz do idioma original, seguido da tradução.")
+            both.triggered.connect(lambda _=False, c=code: self.translate_requested.emit(c, True))
+            self.translate_menu.addSeparator()
+        back = self.translate_menu.addAction(f"Voltar ao original ({LANGUAGES[original].lower()})")
+        back.setEnabled(bool(document.translated_from))
+        back.triggered.connect(self.restore_requested)
+
     def dictionary_changed(self) -> None:
         """Recarrega o dicionario de pronuncia (ex.: depois de corrigir um termo)."""
         self._dictionary = load_default()
@@ -312,7 +349,12 @@ class PreviewPanel(QGroupBox):
             self.summary.setText("Nenhum documento selecionado.")
             return
         selected = document.included_chapters()
-        parts = [f"<b>{html.escape(document.title)}</b>", KIND_LABELS.get(document.kind.value, document.kind.value)]
+        parts = [
+            f"<b>{html.escape(document.title)}</b>",
+            KIND_LABELS.get(document.kind.value, document.kind.value),
+            LANGUAGES.get(document.language, document.language)
+            + (f" (traduzido do {LANGUAGES[document.translated_from].lower()})" if document.translated_from else ""),
+        ]
         if document.page_count:
             parts.append(f"{document.page_count} página(s)")
         parts.append(f"{len(selected)} de {len(document.chapters)} capítulo(s) selecionados")

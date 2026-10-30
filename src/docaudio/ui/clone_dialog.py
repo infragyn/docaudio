@@ -10,7 +10,6 @@ from PySide6.QtCore import QThreadPool, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -19,7 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QVBoxLayout,
+    QStyle,
     QWidget,
 )
 
@@ -27,7 +26,7 @@ from docaudio.core import paths
 from docaudio.core.dependencies import find_ffmpeg
 from docaudio.speech import clone_provider
 from docaudio.speech.base import VoiceInfo
-from docaudio.ui import audio_player
+from docaudio.ui import audio_player, theme
 from docaudio.ui.workers import Worker
 
 log = logging.getLogger(__name__)
@@ -82,7 +81,7 @@ class CloneVoiceDialog(QDialog):
     def __init__(self, provider, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Criar voz clonada")
-        self.resize(620, 560)
+        self.resize(660, 600)
         self.provider = provider
         self.pool = QThreadPool.globalInstance()
         self.recorder = Recorder()
@@ -90,66 +89,79 @@ class CloneVoiceDialog(QDialog):
         self.created: VoiceInfo | None = None
         self._workers: set[Worker] = set()
 
-        layout = QVBoxLayout(self)
-        intro = QLabel(
-            "Grave de 15 a 30 segundos da sua voz, em local silencioso, lendo o texto abaixo "
-            "(ou escolha uma gravação pronta). O modelo de clonagem roda no seu computador: "
-            "a gravação não sai da máquina."
+        layout = theme.dialog_body(
+            self,
+            "Criar voz clonada",
+            "Grave de 15 a 30 segundos da sua voz, em local silencioso. "
+            "Tudo roda no seu computador: a gravação não sai da máquina.",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume),
         )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
 
+        record_card, record_layout = theme.card("1  Leia este texto em voz alta")
         reading = QPlainTextEdit(READING_TEXT)
         reading.setReadOnly(True)
-        reading.setMaximumHeight(110)
-        layout.addWidget(reading)
-
-        form = QFormLayout()
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("Ex.: Minha voz")
-        form.addRow("Nome da voz:", self.name_edit)
-
+        reading.setMaximumHeight(96)
+        record_layout.addWidget(reading)
         record_row = QHBoxLayout()
         self.record_button = QPushButton("● Gravar")
         self.record_button.clicked.connect(self.toggle_recording)
         choose_button = QPushButton("Escolher arquivo…")
+        choose_button.setToolTip("Use uma gravação pronta (WAV, MP3, M4A…) no lugar de gravar agora.")
         choose_button.clicked.connect(self.choose_file)
         self.play_button = QPushButton("Ouvir gravação")
         self.play_button.setEnabled(False)
         self.play_button.clicked.connect(self.play_recording)
+        self.recording_label = QLabel("Nenhuma gravação.")
+        theme.set_role(self.recording_label, "muted")
         record_row.addWidget(self.record_button)
         record_row.addWidget(choose_button)
         record_row.addWidget(self.play_button)
         record_row.addStretch(1)
-        form.addRow("Gravação:", record_row)
-        self.recording_label = QLabel("Nenhuma gravação.")
-        form.addRow("", self.recording_label)
-        layout.addLayout(form)
+        record_row.addWidget(self.recording_label)
+        record_layout.addLayout(record_row)
+        layout.addWidget(record_card)
 
+        name_card, name_layout = theme.card("2  Nome e autorização")
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Ex.: Minha voz")
+        form.addRow("Nome da voz:", self.name_edit)
+        name_layout.addLayout(form)
         self.consent = QCheckBox(
             "Esta gravação é da minha voz, ou de uma pessoa adulta que autorizou o uso "
             "(voz de criança só com autorização dos responsáveis)."
         )
         self.consent.toggled.connect(self._update_buttons)
-        layout.addWidget(self.consent)
+        name_layout.addWidget(self.consent)
+        layout.addWidget(name_card)
 
+        model_card, model_layout = theme.card("3  Modelo de clonagem")
+        model_row = QHBoxLayout()
         self.model_label = QLabel()
         self.model_label.setWordWrap(True)
-        self.download_button = QPushButton(f"Baixar modelo de clonagem (~{clone_provider.MODEL_SIZE_GB:.1f} GB)")
+        self.download_button = QPushButton(f"Baixar modelo (~{clone_provider.MODEL_SIZE_GB:.1f} GB)")
         self.download_button.clicked.connect(self.download_model)
-        layout.addWidget(self.model_label)
-        layout.addWidget(self.download_button)
+        model_row.addWidget(self.model_label, 1)
+        model_row.addWidget(self.download_button)
+        model_layout.addLayout(model_row)
+        layout.addWidget(model_card)
 
         self.status = QLabel()
         self.status.setWordWrap(True)
-        layout.addWidget(self.status, 1)
+        self.status.setVisible(False)
+        layout.addWidget(self.status)
+        layout.addStretch(1)
 
-        self.buttons = QDialogButtonBox()
-        self.create_button = self.buttons.addButton("Criar voz e ouvir teste", QDialogButtonBox.ButtonRole.AcceptRole)
-        self.buttons.addButton("Fechar", QDialogButtonBox.ButtonRole.RejectRole)
+        footer = QHBoxLayout()
+        footer.addStretch(1)
+        close_button = QPushButton("Fechar")
+        close_button.clicked.connect(self.reject)
+        self.create_button = QPushButton("Criar voz e ouvir teste")
+        theme.set_role(self.create_button, "primary")
         self.create_button.clicked.connect(self.create_voice)
-        self.buttons.rejected.connect(self.reject)
-        layout.addWidget(self.buttons)
+        footer.addWidget(close_button)
+        footer.addWidget(self.create_button)
+        layout.addLayout(footer)
 
         self.timer = QTimer(self, interval=200)
         self.timer.timeout.connect(self._tick)
@@ -161,6 +173,7 @@ class CloneVoiceDialog(QDialog):
     def _refresh_environment(self) -> None:
         has_env = clone_provider.clone_python() is not None
         ready = clone_provider.model_ready()
+        theme.set_role(self.model_label, "success" if has_env and ready else "warning")
         if not has_env:
             self.model_label.setText(
                 "⚠ Ambiente de clonagem (.venv-clonagem) não encontrado. Ele precisa ser instalado uma vez "
@@ -169,7 +182,7 @@ class CloneVoiceDialog(QDialog):
         elif not ready:
             self.model_label.setText("O modelo de clonagem ainda não foi baixado.")
         else:
-            self.model_label.setText("✔ Modelo de clonagem pronto (Chatterbox Multilingual pt-BR).")
+            self.model_label.setText("✔ Modelo pronto (Chatterbox Multilingual pt-BR).")
         self.download_button.setVisible(has_env and not ready)
         self._update_buttons()
 
@@ -234,11 +247,11 @@ class CloneVoiceDialog(QDialog):
 
     def download_model(self) -> None:
         self.download_button.setEnabled(False)
-        self.status.setText("Baixando o modelo de clonagem… isso pode levar vários minutos.")
+        self._set_status("Baixando o modelo de clonagem… isso pode levar vários minutos.", "info")
         self._run(Worker(clone_provider.prepare_model), self._on_downloaded, self._on_failed)
 
     def _on_downloaded(self, _value) -> None:
-        self.status.setText("Modelo baixado.")
+        self._set_status("Modelo baixado.", "success")
         self.download_button.setEnabled(True)
         self._refresh_environment()
 
@@ -251,7 +264,7 @@ class CloneVoiceDialog(QDialog):
             QMessageBox.warning(self, "Criar voz", str(exc))
             return
         self.create_button.setEnabled(False)
-        self.status.setText("Voz criada. Gerando um teste (a primeira vez carrega o modelo na placa de vídeo)…")
+        self._set_status("Voz criada. Gerando um teste (a primeira vez carrega o modelo na placa de vídeo)…", "info")
         sample = paths.temp_dir() / "teste_voz_clonada.wav"
         text = "Olá! Esta é a minha voz clonada no DocAudio, lendo um trecho de teste."
         self._run(
@@ -261,13 +274,18 @@ class CloneVoiceDialog(QDialog):
         )
 
     def _on_sample(self, path: Path) -> None:
-        self.status.setText(f"Pronto! A voz “{self.created.label}” já aparece na lista de vozes.")
+        self._set_status(f"Pronto! A voz “{self.created.label}” já aparece na lista de vozes.", "success")
         audio_player.play_wav(path)
 
     def _on_failed(self, message: str) -> None:
-        self.status.setText(f"Erro: {message}")
+        self._set_status(f"Erro: {message}", "error")
         self.download_button.setEnabled(True)
         self._update_buttons()
+
+    def _set_status(self, text: str, role: str) -> None:
+        self.status.setText(text)
+        theme.set_role(self.status, role)
+        self.status.setVisible(True)
 
     def reject(self) -> None:
         if self.recorder.recording:

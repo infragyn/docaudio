@@ -6,6 +6,7 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
+from docaudio.core.translation import TranslationError
 from docaudio.extractors.base import ExtractionError
 from docaudio.speech.base import SpeechError
 
@@ -39,7 +40,7 @@ class Worker(QRunnable):
     def run(self) -> None:
         try:
             result = self.fn(*self.args, **self.kwargs)
-        except (SpeechError, ExtractionError) as exc:
+        except (SpeechError, ExtractionError, TranslationError) as exc:
             log.error("%s", exc)
             self.signals.failed.emit(str(exc))
         except Exception as exc:

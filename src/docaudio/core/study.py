@@ -11,6 +11,7 @@ editavel continua igual. Reconhece:
 import re
 from dataclasses import dataclass, replace
 
+from docaudio.core.language import phrase
 from docaudio.core.model import Block, BlockType, Chapter, Document
 
 QUESTION = re.compile(r"^\s*(\d{1,3})[.)]\s+\S")
@@ -55,12 +56,12 @@ def answer_key(document: Document) -> dict[int, Answer]:
     return answers
 
 
-def answer_text(number: int, answer: Answer) -> str:
-    text = f"Resposta da questão {number}: letra {answer.letter}."
+def answer_text(number: int, answer: Answer, language: str = "pt") -> str:
+    text = phrase("answer", language, number=number, letter=answer.letter)
     return f"{text} {answer.comment}" if answer.comment else text
 
 
-def study_chapter(chapter: Chapter, key: dict[int, Answer], think_ms: int) -> Chapter:
+def study_chapter(chapter: Chapter, key: dict[int, Answer], think_ms: int, language: str = "pt") -> Chapter:
     """Copia do capitulo com pausas para pensar e as respostas no lugar certo."""
     blocks: list[Block] = []
     question: int | None = None
@@ -85,7 +86,7 @@ def study_chapter(chapter: Chapter, key: dict[int, Answer], think_ms: int) -> Ch
             last_alternative = following is None or not ALTERNATIVE.match(following.text)
             if last_alternative and question in key:
                 blocks.append(replace(block, pause_after_ms=think_ms))
-                blocks.append(Block(BlockType.PARAGRAPH, answer_text(question, key[question]), page=block.page))
+                blocks.append(Block(BlockType.PARAGRAPH, answer_text(question, key[question], language), page=block.page))
                 question = None
                 continue
         elif block.type != BlockType.LIST:
@@ -97,4 +98,4 @@ def study_chapter(chapter: Chapter, key: dict[int, Answer], think_ms: int) -> Ch
 def study_document_chapters(document: Document, think_ms: int) -> dict[int, Chapter]:
     """Capitulos transformados, por numero, para a conversao e a previa."""
     key = answer_key(document)
-    return {chapter.number: study_chapter(chapter, key, think_ms) for chapter in document.chapters}
+    return {chapter.number: study_chapter(chapter, key, think_ms, document.language) for chapter in document.chapters}

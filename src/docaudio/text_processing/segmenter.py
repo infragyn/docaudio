@@ -8,17 +8,20 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from docaudio.core.language import phrase
 from docaudio.core.model import BlockType, Chapter
 
 MAX_SEGMENT_CHARS = 400
-SKIPPED_CODE_NOTICE = "Exemplo de código omitido na narração."
-_SENTENCE_END = re.compile(r"(?<=[.!?…:;])\s+(?=[\"“'(\[]?[A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9])")
+SKIPPED_CODE_NOTICE = phrase("skipped_code", "pt")
+_SENTENCE_END = re.compile(r"(?<=[.!?…:;])\s+(?=[\"“'(\[¿¡]?[A-ZÁÉÍÓÚÂÊÔÃÕÇÑ0-9])")
 
 
 @dataclass(frozen=True)
 class Segment:
     text: str
     pause_after_ms: int
+    # Idioma do trecho quando difere do documento (modo bilingue); "" = o do documento.
+    language: str = ""
 
 
 def is_speakable(text: str) -> bool:
@@ -70,6 +73,8 @@ def segment_chapter(
     sentence_pause_ms: int = 250,
     paragraph_pause_ms: int = 700,
     limit: int = MAX_SEGMENT_CHARS,
+    language: str = "pt",
+    normalizer_for: Callable[[str], Callable[[str], str]] | None = None,
 ) -> list[Segment]:
     """Trechos do capitulo: titulo (opcional), depois cada bloco incluido.
 
@@ -86,15 +91,18 @@ def segment_chapter(
     for block in chapter.blocks:
         if not block.include:
             if block.type == BlockType.CODE and not previous_skipped_code:
-                segments.append(Segment(SKIPPED_CODE_NOTICE, paragraph_pause_ms))
+                segments.append(Segment(phrase("skipped_code", language), paragraph_pause_ms))
             previous_skipped_code = previous_skipped_code or block.type == BlockType.CODE
             continue
         previous_skipped_code = False
-        text = normalizer(block.text)
+        # Bloco em outro idioma (modo bilingue): regras e voz desse idioma.
+        block_language = block.language if block.language and block.language != language else ""
+        normalize_block = normalizer_for(block_language) if block_language and normalizer_for else normalizer
+        text = normalize_block(block.text)
         if not is_speakable(text):
             continue
         if block.type == BlockType.HEADING:
-            segments.append(Segment(text.rstrip(".") + ".", heading_pause))
+            segments.append(Segment(text.rstrip(".") + ".", heading_pause, block_language))
             continue
         # Linhas so com simbolos (ex.: "}" em codigo-fonte) nao tem o que narrar.
         sentences = [s for s in split_sentences(text) if is_speakable(s)]
@@ -102,5 +110,5 @@ def segment_chapter(
         block_pause = paragraph_pause_ms if block.pause_after_ms is None else block.pause_after_ms
         for index, piece in enumerate(pieces):
             last = index == len(pieces) - 1
-            segments.append(Segment(piece, block_pause if last else sentence_pause_ms))
+            segments.append(Segment(piece, block_pause if last else sentence_pause_ms, block_language))
     return segments

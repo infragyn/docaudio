@@ -1,4 +1,9 @@
-"""Vozes Kokoro (modelo aberto, Apache 2.0) com sotaque brasileiro: Dora, Alex e Santa."""
+"""Vozes Kokoro (modelo aberto, Apache 2.0) em portugues, ingles e espanhol.
+
+O mesmo modelo (voices-v1.0.bin) traz vozes de varios idiomas; a primeira letra
+do nome indica o idioma: p = portugues, a = ingles americano, b = ingles
+britanico, e = espanhol.
+"""
 
 import logging
 import threading
@@ -17,12 +22,33 @@ log = logging.getLogger(__name__)
 PREFIX = "kokoro:"
 MODEL_FILE = "kokoro-v1.0.int8.onnx"
 VOICES_FILE = "voices-v1.0.bin"
-LANGUAGE = "pt-br"
+# Prefixo da voz -> (codigo do espeak-ng usado pela Kokoro, idioma no padrao do DocAudio)
+LANGUAGE_BY_PREFIX = {"p": ("pt-br", "pt_BR"), "a": ("en-us", "en_US"), "b": ("en-gb", "en_GB"), "e": ("es", "es_ES")}
+LANGUAGE = LANGUAGE_BY_PREFIX["p"][0]
+# Selecao das vozes mais naturais de cada idioma (o modelo tem 54).
 VOICES = {
     "pf_dora": ("Dora", "feminina"),
     "pm_alex": ("Alex", "masculina"),
     "pm_santa": ("Santa", "masculina"),
+    "af_heart": ("Heart", "feminina"),
+    "af_bella": ("Bella", "feminina"),
+    "af_nicole": ("Nicole", "feminina"),
+    "af_sarah": ("Sarah", "feminina"),
+    "am_michael": ("Michael", "masculina"),
+    "am_adam": ("Adam", "masculina"),
+    "am_eric": ("Eric", "masculina"),
+    "bf_emma": ("Emma", "feminina"),
+    "bf_isabella": ("Isabella", "feminina"),
+    "bm_george": ("George", "masculina"),
+    "bm_lewis": ("Lewis", "masculina"),
+    "ef_dora": ("Dora", "feminina"),
+    "em_alex": ("Alex", "masculina"),
+    "em_santa": ("Santa", "masculina"),
 }
+
+
+def voice_language(key: str) -> tuple[str, str]:
+    return LANGUAGE_BY_PREFIX.get(key[:1], LANGUAGE_BY_PREFIX["p"])
 
 
 def model_dirs() -> list[Path]:
@@ -50,8 +76,8 @@ class KokoroProvider:
         return [
             VoiceInfo(
                 id=PREFIX + key,
-                label=f"{name} (pt_BR)",
-                language="pt_BR",
+                label=f"{name} ({voice_language(key)[1]})",
+                language=voice_language(key)[1],
                 model_path=folder / MODEL_FILE,
                 engine="Kokoro",
                 kind=kind,
@@ -94,7 +120,7 @@ class KokoroProvider:
                 parts: list[np.ndarray] = []
                 rate = 24000
                 for sentence in split_sentences(text) or [text]:
-                    samples, rate = model.create(sentence, voice=key, speed=speed, lang=LANGUAGE)
+                    samples, rate = model.create(sentence, voice=key, speed=speed, lang=voice_language(key)[0])
                     parts.append((np.clip(samples, -1, 1) * 32767).astype(np.int16))
             with wave.open(str(tmp), "wb") as wav:
                 wav.setnchannels(1)

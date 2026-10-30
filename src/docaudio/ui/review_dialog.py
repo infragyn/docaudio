@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QStyle,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -42,18 +41,17 @@ class ReviewDialog(QDialog):
         self.on_fix = on_fix
         self.recompute = recompute
 
-        layout = QVBoxLayout(self)
-        hint = QLabel(
-            "Siglas, palavras estrangeiras e nomes técnicos que não estão no dicionário. "
-            "Ouça os mais frequentes; corrija os errados e marque os certos para não aparecerem de novo."
+        layout = theme.dialog_body(
+            self,
+            "Revisar pronúncia",
+            f"{title} — siglas, palavras estrangeiras e nomes técnicos fora do dicionário. "
+            "Ouça os mais frequentes, corrija os errados e marque os certos para não aparecerem de novo.",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView),
         )
-        hint.setWordWrap(True)
-        theme.set_role(hint, "muted")
-        layout.addWidget(hint)
 
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
-        self.table.verticalHeader().setVisible(False)
+        theme.style_table(self.table)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         header = self.table.horizontalHeader()
@@ -77,7 +75,8 @@ class ReviewDialog(QDialog):
         self.ok_button.clicked.connect(self._mark_ok)
         self.count_label = QLabel()
         theme.set_role(self.count_label, "muted")
-        close_button = QPushButton("Fechar")
+        close_button = QPushButton("Concluir")
+        theme.set_role(close_button, "primary")
         close_button.clicked.connect(self.accept)
         for widget in (self.listen_button, self.fix_button, self.ok_button):
             buttons.addWidget(widget)

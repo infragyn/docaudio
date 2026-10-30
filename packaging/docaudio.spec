@@ -22,12 +22,16 @@ binaries = collect_dynamic_libs("onnxruntime")
 # Kokoro: configuracao do modelo e espeak-ng proprio (biblioteca e dados de idioma).
 datas += collect_data_files("kokoro_onnx") + collect_data_files("espeakng_loader")
 binaries += collect_dynamic_libs("espeakng_loader")
+# Traducao offline: DLLs do CTranslate2 (os modelos ficam em dados/traducao, baixados sob demanda).
+binaries += collect_dynamic_libs("ctranslate2")
 
 # Voz padrao, binarios (ffmpeg.exe), dicionarios e dados de OCR vao junto do executavel.
 for sub in ("voices", "bin", "pronunciation", "tessdata", "tessdata_best"):
-    for file in sorted((ROOT / "resources" / sub).glob("*")):
+    # Inclui subpastas (ex.: pronunciation/temas) mantendo a mesma estrutura.
+    for file in sorted((ROOT / "resources" / sub).rglob("*")):
         if file.is_file() and file.name != ".gitkeep":
-            datas.append((str(file), f"resources/{sub}"))
+            relative = file.parent.relative_to(ROOT / "resources")
+            datas.append((str(file), f"resources/{relative.as_posix()}"))
 
 # Processo auxiliar da clonagem: roda com o Python de .venv-clonagem, entao vai como arquivo.
 # Sem esse ambiente na maquina, a trava desativa a clonagem e o script nunca e usado.

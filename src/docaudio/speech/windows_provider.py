@@ -17,7 +17,12 @@ SAMPLE_RATE = 22050
 FORMAT_22KHZ_16BIT_MONO = 22  # SpeechAudioFormatType.SAFT22kHz16BitMono
 CREATE_FOR_WRITE = 3  # SpeechStreamFileMode.SSFMCreateForWrite
 # Codigos de idioma (LCID em hexadecimal) do portugues.
-PORTUGUESE_LCIDS = {"416": "pt_BR", "816": "pt_PT"}
+# Codigos de idioma do Windows (LCID em hexadecimal) dos idiomas que o DocAudio le.
+LANGUAGE_LCIDS = {
+    "416": "pt_BR", "816": "pt_PT", "409": "en_US", "809": "en_GB",
+    "c0a": "es_ES", "40a": "es_ES", "80a": "es_MX",
+}
+PORTUGUESE_LCIDS = {k: v for k, v in LANGUAGE_LCIDS.items() if v.startswith("pt")}
 GENDERS = {"female": "feminina", "male": "masculina"}
 
 
@@ -52,15 +57,15 @@ class WindowsProvider:
                 _, tokens = self._tokens()
                 for token in tokens:
                     lcid = (token.GetAttribute("Language") or "").split(";")[0].lower()
-                    if lcid not in PORTUGUESE_LCIDS:
+                    if lcid not in LANGUAGE_LCIDS:
                         continue
                     name = token.GetAttribute("Name") or token.GetDescription()
                     short = name.replace("Microsoft ", "").replace(" Desktop", "")
                     voices.append(
                         VoiceInfo(
                             id=PREFIX + name,
-                            label=f"{short} ({PORTUGUESE_LCIDS[lcid]})",
-                            language=PORTUGUESE_LCIDS[lcid],
+                            label=f"{short} ({LANGUAGE_LCIDS[lcid]})",
+                            language=LANGUAGE_LCIDS[lcid],
                             engine="Windows",
                             kind=GENDERS.get((token.GetAttribute("Gender") or "").lower(), ""),
                         )

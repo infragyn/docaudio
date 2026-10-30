@@ -2,7 +2,7 @@
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 from docaudio.core import paths
@@ -10,6 +10,8 @@ from docaudio.core import paths
 log = logging.getLogger(__name__)
 
 DEFAULT_VOICE = "pt_BR-faber-medium"
+# Vozes Kokoro ja vem no mesmo modelo das vozes em portugues: nada a baixar.
+DEFAULT_VOICES = {"en": "kokoro:af_heart", "es": "kokoro:ef_dora"}
 MIN_SPEED = 0.5
 MAX_SPEED = 2.0
 OUTPUT_FORMATS = ("mp3", "m4b", "wav")
@@ -50,6 +52,14 @@ class Settings:
     # Modo questoes: pausa para pensar e resposta do gabarito logo depois de cada questao.
     study_mode: bool = False
     think_pause_s: int = 5
+    # Idioma dos documentos: "auto" (detecta), "pt", "en" ou "es".
+    document_language: str = "auto"
+    # Voz de cada idioma alem do portugues (que usa `voice`), ex.: {"en": "kokoro:af_heart"}.
+    voices_by_language: dict = field(default_factory=dict)
+    # Dicionarios tematicos de pronuncia ligados (nomes de resources/pronunciation/temas).
+    pronunciation_themes: list[str] = field(
+        default_factory=lambda: ["ti", "direito", "latim", "administracao_publica", "contabilidade", "saude"]
+    )
     # Pasta vigiada: documentos novos nela entram sozinhos na fila de conversao.
     watch_dir: str = ""
     watch_enabled: bool = False
@@ -66,9 +76,28 @@ class Settings:
         self.speed = min(MAX_SPEED, max(MIN_SPEED, self.speed))
         if self.output_format not in OUTPUT_FORMATS:
             self.output_format = "mp3"
+        if self.document_language not in ("auto", "pt", "en", "es"):
+            self.document_language = "auto"
+        if not isinstance(self.voices_by_language, dict):
+            self.voices_by_language = {}
         if not isinstance(self.documents, list):
             self.documents = []
         self.documents = [str(d) for d in self.documents if isinstance(d, str) and d]
+
+    def voice_for(self, language: str) -> str:
+        """Voz usada para documentos no idioma; o portugues usa a voz principal."""
+        if language == "pt":
+            # Numa copia feita por for_language, a voz do portugues fica guardada no mapa.
+            return self.voices_by_language.get("pt") or self.voice
+        return self.voices_by_language.get(language) or DEFAULT_VOICES.get(language, self.voice)
+
+    def for_language(self, language: str) -> "Settings":
+        """Copia com a voz do idioma (cada documento da fila usa a do seu idioma).
+
+        As vozes dos outros idiomas continuam no mapa: o modo bilingue usa duas.
+        """
+        voices = {**self.voices_by_language, "pt": self.voice_for("pt")}
+        return replace(self, voice=self.voice_for(language), voices_by_language=voices)
 
     def resolved_output_dir(self) -> Path:
         return Path(self.output_dir) if self.output_dir else paths.default_output_dir()

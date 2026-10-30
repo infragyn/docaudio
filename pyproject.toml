@@ -17,6 +17,9 @@ dependencies = [
     # Gravacao da voz a clonar e player do audiolivro (o PySide6-Essentials nao tem QtMultimedia).
     "sounddevice>=0.4",
     "numpy>=1.24",
+    # Traducao offline (modelos Argos/OPUS-MT executados sem PyTorch).
+    "ctranslate2>=4.4",
+    "sentencepiece>=0.2",
     "comtypes>=1.4; sys_platform == 'win32'",
 ]
 

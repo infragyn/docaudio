@@ -114,10 +114,13 @@ class PlayerDialog(QDialog):
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
         self.resize(980, 620)
 
-        layout = QVBoxLayout(self)
-        heading = QLabel(title)
-        theme.set_role(heading, "title")
-        layout.addWidget(heading)
+        layout = theme.dialog_body(
+            self,
+            title,
+            f"{len(self.tracks)} capítulo(s) · clique numa frase para ouvir a partir dela · "
+            "espaço toca/pausa, setas voltam/avançam 10 s",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
+        )
 
         self.chapter_list = QListWidget()
         self.chapter_list.setMinimumWidth(180)
@@ -158,10 +161,11 @@ class PlayerDialog(QDialog):
         self.time_label = QLabel("0:00 / 0:00")
         self.time_label.setMinimumWidth(110)
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        transport, transport_layout = theme.card()
         bar = QHBoxLayout()
         bar.addWidget(self.slider, 1)
         bar.addWidget(self.time_label)
-        layout.addLayout(bar)
+        transport_layout.addLayout(bar)
 
         controls = QHBoxLayout()
         icon = self.style().standardIcon
@@ -176,7 +180,8 @@ class PlayerDialog(QDialog):
         for widget in (self.prev_button, self.back_button, self.play_button, self.forward_button, self.next_button):
             controls.addWidget(widget)
         controls.addStretch(1)
-        layout.addLayout(controls)
+        transport_layout.addLayout(controls)
+        layout.addWidget(transport)
 
         self.timer = QTimer(self, interval=TICK_MS)
         self.timer.timeout.connect(self._tick)

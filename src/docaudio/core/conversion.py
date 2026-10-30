@@ -169,6 +169,9 @@ class ConversionJob:
         self.document = document
         self.settings = settings
         self.provider = provider
+        # O dicionario recebido vale para portugues; outros idiomas usam o seu.
+        if document.language != "pt":
+            dictionary = load_default(document.language)
         self.dictionary = dictionary if dictionary is not None else load_default()
         self.progress_callback = progress
         self.cancel = cancel or threading.Event()
@@ -202,14 +205,18 @@ class ConversionJob:
         for track, chapter in enumerate(chapters, start=1):
             segments = segment_chapter(
                 chapter,
-                lambda text: normalize(text, self.dictionary),
+                lambda text: normalize(text, self.dictionary, self.document.language),
                 announce_title=s.announce_titles,
                 sentence_pause_ms=s.sentence_pause_ms,
                 paragraph_pause_ms=s.paragraph_pause_ms,
+                language=self.document.language,
+                normalizer_for=self._normalizer_for,
             )
             if not segments:
                 continue
-            chapter_hash = _hash(self._voice_key(), s.chapter_pause_ms, [(g.text, g.pause_after_ms) for g in segments])
+            chapter_hash = _hash(
+                self._voice_key(), s.chapter_pause_ms, [(g.text, g.pause_after_ms, g.language) for g in segments]
+            )
             name = fit_name(self.folder, f"{track:02d} - {safe_filename(chapter.title)}", "wav" if s.output_format == "wav" else "mp3")
             planned.append(_PlannedChapter(track, chapter, segments, chapter_hash, name))
         return planned
@@ -234,8 +241,17 @@ class ConversionJob:
         if self.cancel.is_set():
             raise Cancelled()
 
+    def _normalizer_for(self, language: str):
+        """Normalizacao de um bloco em outro idioma (modo bilingue), com o dicionario desse idioma."""
+        dictionary = load_default(language)
+        return lambda text: normalize(text, dictionary, language)
+
+    def _segment_voice(self, segment: Segment) -> str:
+        return self.settings.voice_for(segment.language) if segment.language else self.settings.voice
+
     def _segment_wav(self, segment: Segment) -> Path:
-        key = _hash(self._voice_key(), segment.text, segment.pause_after_ms)
+        voice = self._segment_voice(segment)
+        key = _hash(self._voice_key(), segment.text, segment.pause_after_ms, voice if segment.language else "")
         return self.work / "trechos" / f"{key[:32]}.wav"
 
     def _chapter_wav(self, planned: _PlannedChapter, count: int) -> Path:
@@ -252,7 +268,7 @@ class ConversionJob:
             if not wav.exists():
                 self.provider.synthesize_to_wav(
                     segment.text,
-                    self.settings.voice,
+                    self._segment_voice(segment),
                     self.settings.speed,
                     wav,
                     sentence_pause_ms=self.settings.sentence_pause_ms,

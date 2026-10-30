@@ -58,6 +58,8 @@ class Block:
     ocr: bool = False
     # Pausa depois do bloco no lugar da pausa de paragrafo (ex.: tempo para pensar no modo questoes).
     pause_after_ms: int | None = None
+    # Idioma deste bloco quando difere do documento (modo bilingue); "" = o do documento.
+    language: str = ""
 
     def __post_init__(self) -> None:
         if not self.text:
@@ -101,6 +103,10 @@ class Document:
     warnings: list[str] = field(default_factory=list)
     # Autor das propriedades do arquivo, quando houver (vai para os metadados do audio).
     author: str = ""
+    # Idioma de leitura: "pt", "en" ou "es" (detectado ou escolhido pelo usuario).
+    language: str = "pt"
+    # Idioma original quando este documento e uma traducao; "" quando nao e.
+    translated_from: str = ""
 
     def included_chapters(self) -> list[Chapter]:
         return [c for c in self.chapters if c.include]

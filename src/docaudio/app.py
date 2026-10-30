@@ -23,6 +23,18 @@ def _install_excepthook() -> None:
     sys.excepthook = hook
 
 
+def _install_translations(app) -> None:
+    """Botoes padrao do Qt em portugues ("Cancelar", "Salvar", "Sim"/"Não")."""
+    from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+
+    translator = QTranslator(app)
+    folder = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    if translator.load(QLocale("pt_BR"), "qtbase", "_", folder):
+        app.installTranslator(translator)
+    else:
+        log.debug("Tradução do Qt para português não encontrada em %s", folder)
+
+
 def _bring_to_front(window, files: list[str]) -> None:
     from PySide6.QtCore import Qt
 
@@ -52,6 +64,7 @@ def main() -> int:
     server = single_instance.InstanceServer(pending.extend)
 
     log_file = logs.setup_logging()
+    _install_translations(app)
     theme.apply(app)
     _install_excepthook()
     # Aparece antes de carregar vozes e verificacoes, que levam alguns segundos.

@@ -66,12 +66,22 @@ def check_ffmpeg(settings: Settings) -> DependencyStatus:
     )
 
 
-def find_tessdata(settings: Settings) -> Path | None:
+def ocr_language_code(settings: Settings) -> str:
+    """Idioma do OCR: o do documento, se escolhido e instalado; senao o configurado (portugues)."""
+    from docaudio.speech.voice_download import TESSERACT_CODES
+
+    code = TESSERACT_CODES.get(settings.document_language)
+    if code and code != settings.ocr_language and find_tessdata(settings, code):
+        return code
+    return settings.ocr_language
+
+
+def find_tessdata(settings: Settings, code: str | None = None) -> Path | None:
     """Pasta com <idioma>.traineddata para o OCR.
 
     Ordem: configurada, do pacote, do usuario, TESSDATA_PREFIX, instalacao do Tesseract.
     """
-    language_file = f"{settings.ocr_language}.traineddata"
+    language_file = f"{code or settings.ocr_language}.traineddata"
     candidates = [Path(settings.tessdata_dir)] if settings.tessdata_dir else []
     fast = [paths.resources_dir() / "tessdata", paths.data_dir() / "tessdata"]
     best = [paths.resources_dir() / "tessdata_best", paths.data_dir() / "tessdata_best"]

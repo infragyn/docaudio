@@ -307,7 +307,41 @@ def _alternative(match: re.Match) -> str:
     return f"Alternativa {LETTER_NAMES[letter]}: "
 
 
-def normalize(text: str, dictionary: PronunciationDictionary | None = None) -> str:
+FOREIGN_WORDS = {
+    "en": {"dot": "dot", "at": "at", "slash": "slash", "and": "and", "bullet": ", ", "option": "Option"},
+    "es": {"dot": "punto", "at": "arroba", "slash": "barra", "and": "y", "bullet": ", ", "option": "Opción"},
+}
+_URL_PARTS = re.compile(r"[./]")
+
+
+def _normalize_foreign(text: str, dictionary: PronunciationDictionary | None, language: str) -> str:
+    """Ingles e espanhol: o espeak-ng da voz ja le numeros, datas e moedas nesses idiomas.
+
+    Aqui so entra o que ele le mal: enderecos, titulos em maiusculas, marcadores e simbolos.
+    """
+    words = FOREIGN_WORDS[language]
+
+    def speak_address(match: re.Match) -> str:
+        address = re.sub(r"^(?:https?://)?(?:www\.)?", "", match.group().rstrip(".,;:"), flags=re.IGNORECASE)
+        spoken = _URL_PARTS.sub(lambda m: f" {words['dot'] if m.group() == '.' else words['slash']} ", address.rstrip("/"))
+        return spoken.replace("@", f" {words['at']} ")
+
+    text = _ALTERNATIVE.sub(lambda m: f"{words['option']} {(m.group(1) or m.group(2)).upper()}: ", text)
+    text = _URL.sub(speak_address, text)
+    text = _EMAIL.sub(speak_address, text)
+    if dictionary:
+        text = dictionary.apply(text)
+    text = _lower_caps_lines(text)
+    text = re.sub(r"\s&\s", f" {words['and']} ", text)
+    text = re.sub(r"[|→⇒►•▪◦]", words["bullet"], text)
+    text = re.sub(r"\s[–—]\s", ", ", text)
+    text = re.sub(r"\s+,", ",", text)
+    return "\n".join(_SPACES.sub(" ", line).strip() for line in text.split("\n")).strip()
+
+
+def normalize(text: str, dictionary: PronunciationDictionary | None = None, language: str = "pt") -> str:
+    if language in FOREIGN_WORDS:
+        return _normalize_foreign(text, dictionary, language)
     text = _BIG_O.sub(_big_o, text)
     text = _ALTERNATIVE.sub(_alternative, text)
     text = re.sub(r"(\w)²", r"\1 ao quadrado", text)

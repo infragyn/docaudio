@@ -53,6 +53,8 @@ class FolderWatcher(QObject):
         """Vigia `folder`; arquivos que ja estavam la so entram com `include_existing`."""
         self.stop()
         self.folder = folder
+        # Relido aqui: outra sessao (ou outro vigia) pode ter convertido arquivos desde entao.
+        self._processed = self._load_processed()
         if not include_existing:
             for path in self._documents():
                 self._processed.setdefault(str(path), _signature(path))

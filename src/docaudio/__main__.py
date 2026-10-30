@@ -259,8 +259,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = Settings.load()
         from docaudio.speech import clone_provider
+        from docaudio.text_processing import pronunciation
 
         clone_provider.set_enabled(settings.clone_enabled)
+        pronunciation.set_themes(settings.pronunciation_themes)
         return args.func(args, settings)
     except Exception:
         # No executavel sem console, o log e o unico lugar onde o erro aparece.

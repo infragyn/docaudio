@@ -41,13 +41,17 @@ from PySide6.QtWidgets import (
 from docaudio import APP_NAME, __version__
 from docaudio.core import dependencies, documents, paths
 from docaudio.core.conversion import Interrupted, find_interrupted
+from docaudio.core.language import AUTO as AUTO_LANGUAGE
+from docaudio.core.language import DEFAULT as DEFAULT_LANGUAGE
+from docaudio.core.language import LANGUAGES, detect_language, language_of_voice, phrase
 from docaudio.core.loader import (
     LONG_CONVERSION_SECONDS,
     estimated_generation_seconds,
     format_duration,
     load_document,
 )
-from docaudio.core.model import Document
+from docaudio.core.model import BlockType, Document
+from docaudio.core import translation
 from docaudio.core.rules import apply_rules
 from docaudio.speech import clone_provider
 from docaudio.speech.registry import VoiceRegistry
@@ -57,13 +61,16 @@ from docaudio.ui import theme
 from docaudio.ui.log_panel import LogPanel
 from docaudio.text_processing import review
 from docaudio.text_processing.normalize import normalize
-from docaudio.text_processing.pronunciation import ensure_user_dictionary, load_default, save_user_entry
+from docaudio.text_processing import dictionary_import, pronunciation
+from docaudio.text_processing.pronunciation import ensure_user_dictionary, load_default, save_user_entries, save_user_entry
 from docaudio.ui.conversion_worker import ConversionWorker, QueueItem
 from docaudio.audio.playback import PlaybackError
 from docaudio.ui.player import PlayerDialog
 from docaudio.ui.preview import PreviewPanel
 from docaudio.ui.watch import FolderWatcher
 from docaudio.ui.pronunciation_dialog import PronunciationDialog
+from docaudio.ui.import_dialog import ImportDialog
+from docaudio.ui.languages_dialog import LanguagesDialog
 from docaudio.ui.review_dialog import ReviewDialog
 from docaudio.ui.workers import Worker
 
@@ -72,6 +79,7 @@ log = logging.getLogger(__name__)
 # Texto do item da lista sem a situacao na fila.
 BASE_TEXT_ROLE = Qt.ItemDataRole.UserRole + 1
 
+# Frase de amostra em portugues (os outros idiomas usam core.language.phrase).
 SAMPLE_PHRASE = (
     "Olá! Esta é uma amostra da voz escolhida. "
     "O capítulo um apresenta os conceitos básicos do documento."
@@ -120,6 +128,8 @@ class MainWindow(QMainWindow):
         self.load_errors: dict[str, str] = {}
         self.loading: set[str] = set()
         self.edited: set[str] = set()
+        # Original de cada documento traduzido (o traduzido fica em self.loaded).
+        self.originals: dict[str, Document] = {}
         # Referencias as tarefas em andamento: sem elas os sinais podem ser coletados antes de chegar.
         self._workers: set[Worker] = set()
         self.conversion: ConversionWorker | None = None
@@ -179,6 +189,11 @@ class MainWindow(QMainWindow):
         self.clone_allowed_action.toggled.connect(self._on_clone_allowed_toggled)
         tools_menu.addAction(self.clone_allowed_action)
         tools_menu.addSeparator()
+        languages_action = QAction("&Idiomas e vozes…", self)
+        languages_action.setToolTip("Vozes e OCR para documentos em português, inglês e espanhol.")
+        languages_action.triggered.connect(self.open_languages)
+        tools_menu.addAction(languages_action)
+        tools_menu.addSeparator()
         watch_choose = QAction("Escolher pasta &vigiada…", self)
         watch_choose.setToolTip("Documentos novos colocados nessa pasta são convertidos sozinhos, com a voz atual.")
         watch_choose.triggered.connect(self.choose_watch_folder)
@@ -194,6 +209,20 @@ class MainWindow(QMainWindow):
         dictionary_action = QAction("Editar dicionário de &pronúncia…", self)
         dictionary_action.triggered.connect(self.edit_dictionary)
         tools_menu.addAction(dictionary_action)
+        import_action = QAction("&Importar dicionário de pronúncia…", self)
+        import_action.setToolTip("Dicionários de leitores de tela (NVDA .dic), léxicos PLS ou planilhas CSV/TSV.")
+        import_action.triggered.connect(self.import_dictionary)
+        tools_menu.addAction(import_action)
+        themes_menu = tools_menu.addMenu("Dicionários &temáticos")
+        themes_menu.setToolTipsVisible(True)
+        pronunciation.set_themes(self.settings.pronunciation_themes)
+        for name, label in pronunciation.THEMES.items():
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(name in self.settings.pronunciation_themes)
+            action.setToolTip(f"Pronúncias prontas de {label.lower()} (arquivo temas/{name}.csv).")
+            action.toggled.connect(lambda on, n=name: self._on_theme_toggled(n, on))
+            themes_menu.addAction(action)
         tools_menu.addSeparator()
         data_action = QAction("Abrir pasta de &dados", self)
         data_action.triggered.connect(lambda: self._open_folder(paths.data_dir()))
@@ -260,6 +289,8 @@ class MainWindow(QMainWindow):
         self.preview.study_think_ms = self.settings.think_pause_s * 1000 if self.settings.study_mode else None
         self.preview.pronunciation_requested.connect(self._fix_pronunciation)
         self.preview.review_requested.connect(self.open_pronunciation_review)
+        self.preview.translate_requested.connect(self.translate_current)
+        self.preview.restore_requested.connect(self.restore_original)
 
         top_widget = QSplitter(Qt.Orientation.Horizontal)
         top_widget.addWidget(left)
@@ -363,8 +394,17 @@ class MainWindow(QMainWindow):
         group = QWidget()
         form = QFormLayout(group)
 
-        self.engine_value = QLabel()
-        form.addRow("Mecanismo:", self.engine_value)
+        self.language_combo = self._compact_combo()
+        self.language_combo.addItem("Automático", AUTO_LANGUAGE)
+        for code, name in LANGUAGES.items():
+            self.language_combo.addItem(name, code)
+        self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self.settings.document_language)))
+        self.language_combo.setToolTip(
+            "Idioma dos documentos. No automático, o DocAudio detecta o idioma de cada um e usa a voz "
+            "escolhida para esse idioma."
+        )
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        form.addRow("Idioma:", self.language_combo)
 
         self.voice_combo = self._compact_combo()
         self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
@@ -685,6 +725,7 @@ class MainWindow(QMainWindow):
 
     def _forget(self, key: str) -> None:
         self.loaded.pop(key, None)
+        self.originals.pop(key, None)
         self.load_errors.pop(key, None)
         self.edited.discard(key)
 
@@ -719,6 +760,7 @@ class MainWindow(QMainWindow):
         self._set_item_text(key)
 
     def _show_selected_document(self) -> None:
+        self._refresh_voices_if_language_changed()
         key = self._current_key()
         if key is None:
             self.preview.set_document(None)
@@ -759,6 +801,7 @@ class MainWindow(QMainWindow):
         self._set_item_text(key, f"{document.source.name} — {count} capítulo{'s' if count != 1 else ''}")
         if self._current_key() == key:
             self.preview.set_document(document)
+            self._refresh_voices_if_language_changed()
 
     def _on_load_failed(self, key: str, message: str) -> None:
         self.loading.discard(key)
@@ -799,33 +842,75 @@ class MainWindow(QMainWindow):
 
     # ---- voz --------------------------------------------------------------
 
+    def active_language(self) -> str:
+        """Idioma da lista de vozes: o escolhido ou, no automatico, o do documento selecionado."""
+        if self.settings.document_language in LANGUAGES:
+            return self.settings.document_language
+        document = self.loaded.get(self._current_key() or "")
+        return document.language if document else DEFAULT_LANGUAGE
+
+    def current_voice(self) -> str:
+        return self.settings.voice_for(self.active_language())
+
+    def _set_voice_for(self, language: str, voice_id: str) -> None:
+        if language == DEFAULT_LANGUAGE:
+            self.settings.voice = voice_id
+        else:
+            self.settings.voices_by_language = {**self.settings.voices_by_language, language: voice_id}
+        self._save_settings()
+
     def _load_voices(self) -> None:
+        """Lista so as vozes do idioma ativo; cada idioma lembra a sua voz."""
+        language = self.active_language()
+        self._voices_language = language
+        self.language_combo.setItemText(0, f"Automático ({LANGUAGES[language].lower()})")
         self.voice_combo.blockSignals(True)
         self.voice_combo.clear()
-        voices = self.provider.list_voices()
+        voices = [v for v in self.provider.list_voices() if language_of_voice(v.language) == language]
         for voice in voices:
             self.voice_combo.addItem(voice.display_name, voice.id)
-        index = self.voice_combo.findData(self.settings.voice)
+        wanted = self.settings.voice_for(language)
+        index = self.voice_combo.findData(wanted)
         if index < 0 and voices:
-            log.warning("Voz '%s' não encontrada; usando %s.", self.settings.voice, voices[0].id)
+            log.warning("Voz '%s' não encontrada para %s; usando %s.", wanted, LANGUAGES[language].lower(), voices[0].id)
             index = 0
-            self.settings.voice = voices[0].id
-            self._save_settings()
+            self._set_voice_for(language, voices[0].id)
         self.voice_combo.setCurrentIndex(index)
         self.voice_combo.blockSignals(False)
         has_voice = bool(voices)
         self.voice_combo.setEnabled(has_voice)
         self.sample_button.setEnabled(has_voice)
         if not has_voice:
-            self.voice_combo.addItem("Nenhuma voz instalada")
+            self.voice_combo.addItem(f"Nenhuma voz em {LANGUAGES[language].lower()} (Ferramentas > Idiomas e vozes)")
+        self._update_engine_status()
+
+    def _refresh_voices_if_language_changed(self) -> None:
+        if self.active_language() != getattr(self, "_voices_language", None):
+            self._load_voices()
 
     def _on_voice_changed(self, index: int) -> None:
         voice_id = self.voice_combo.itemData(index)
-        if voice_id and voice_id != self.settings.voice:
-            self.settings.voice = voice_id
-            self._save_settings()
-            log.info("Voz selecionada: %s", voice_id)
+        language = self.active_language()
+        if voice_id and voice_id != self.settings.voice_for(language):
+            self._set_voice_for(language, voice_id)
+            log.info("Voz para %s: %s", LANGUAGES[language].lower(), voice_id)
         self._update_engine_status()
+
+    def _on_language_changed(self, index: int) -> None:
+        choice = self.language_combo.itemData(index)
+        self._set_setting("document_language", choice)
+        # Documentos ja lidos passam a usar o idioma escolhido (ou voltam ao detectado).
+        for document in self.loaded.values():
+            if document.translated_from:
+                continue  # traducao: o idioma e o de destino
+            if choice in LANGUAGES:
+                document.language = choice
+            else:
+                text = " ".join(b.text for c in document.chapters for b in c.blocks if b.type != BlockType.CODE)
+                document.language = detect_language(text)
+        log.info("Idioma dos documentos: %s", LANGUAGES.get(choice, "automático").lower())
+        self.preview.refresh()
+        self._load_voices()
 
     def _show_speed(self, speed: float) -> None:
         self.speed_value.setText(f"{speed:.2f}×".replace(".", ","))
@@ -867,16 +952,15 @@ class MainWindow(QMainWindow):
 
     def _update_engine_status(self) -> None:
         mode = "offline" if self.provider.offline else "online"
-        engine = self.provider.engine_name(self.settings.voice)
-        self.engine_value.setText(f"{engine} ({mode})")
         voice = self.voice_combo.currentText() if self.voice_combo.isEnabled() else "sem voz"
-        self.engine_label.setText(f"Voz ativa: {voice} · {mode}")
+        language = LANGUAGES[self.active_language()].lower()
+        self.engine_label.setText(f"Voz ativa ({language}): {voice} · {mode}")
 
     def play_sample(self) -> None:
         self.sample_button.setEnabled(False)
         self.sample_button.setText("Gerando amostra…")
-        log.info("Gerando amostra com %s a %.2fx.", self.settings.voice, self.settings.speed)
-        self._synthesize_and_play(SAMPLE_PHRASE, self._reset_sample_button)
+        log.info("Gerando amostra com %s a %.2fx.", self.current_voice(), self.settings.speed)
+        self._synthesize_and_play(phrase("sample", self.active_language()), self._reset_sample_button)
 
     def _synthesize_and_play(self, text: str, reset) -> None:
         """Gera `text` com a voz e a velocidade atuais e toca; `reset()` ao terminar ou falhar."""
@@ -885,7 +969,7 @@ class MainWindow(QMainWindow):
         for old in temp.glob("amostra_*.wav"):
             old.unlink(missing_ok=True)
         out = temp / f"amostra_{next(self._sample_counter)}.wav"
-        worker = Worker(self.provider.synthesize_to_wav, text, self.settings.voice, self.settings.speed, out)
+        worker = Worker(self.provider.synthesize_to_wav, text, self.current_voice(), self.settings.speed, out)
 
         def ready(path: Path) -> None:
             reset()
@@ -899,7 +983,8 @@ class MainWindow(QMainWindow):
 
     def _listen_excerpt(self, text: str, normalized: bool) -> None:
         if not normalized:
-            text = normalize(text, load_default())
+            language = self.active_language()
+            text = normalize(text, load_default(language), language)
         self.preview.set_listening(True)
         log.info("Ouvindo trecho da prévia (%d caracteres).", len(text))
         self._synthesize_and_play(text, lambda: self.preview.set_listening(False))
@@ -1019,9 +1104,12 @@ class MainWindow(QMainWindow):
             return
         self._enqueue([self._queue_item(key, replace(self.settings)) for key in keys])
 
-    def _queue_item(self, key: str, settings: Settings) -> QueueItem:
+    def _queue_item(self, key: str, settings: Settings, pick_voice: bool = True) -> QueueItem:
         # Copia: a previa continua editavel; as edicoes valem para a proxima conversao.
-        return QueueItem(key, copy.deepcopy(self.loaded.get(key)), settings)
+        document = copy.deepcopy(self.loaded.get(key))
+        if document is not None and pick_voice:
+            settings = settings.for_language(document.language)
+        return QueueItem(key, document, settings, pick_voice)
 
     def _enqueue(self, items: list[QueueItem]) -> None:
         """Poe na fila em andamento ou comeca uma conversao nova."""
@@ -1057,7 +1145,7 @@ class MainWindow(QMainWindow):
             if (document := self.loaded.get(key))
             for chapter in document.included_chapters()
         )
-        engine = self.provider.engine_name(self.settings.voice)
+        engine = self.provider.engine_name(self.current_voice())
         seconds = estimated_generation_seconds(characters, engine)
         if seconds < LONG_CONVERSION_SECONDS:
             return True
@@ -1272,7 +1360,7 @@ class MainWindow(QMainWindow):
             settings = replace(
                 self.settings, voice=interrupted.voice, speed=interrupted.speed, output_format=interrupted.format
             )
-            queue.append(self._queue_item(key, settings))
+            queue.append(self._queue_item(key, settings, pick_voice=False))
             log.info("Retomando %s (%.0f%% pronto).", interrupted.document.name, interrupted.fraction * 100)
         self._enqueue(queue)
         self._refresh_resume_button()
@@ -1325,6 +1413,110 @@ class MainWindow(QMainWindow):
             self._load_voices()
             self._update_engine_status()
             log.info("Voz clonada selecionada: %s", dialog.created.label)
+
+    def _on_theme_toggled(self, name: str, enabled: bool) -> None:
+        themes = [n for n in pronunciation.THEMES if (n == name and enabled) or (n != name and n in self.settings.pronunciation_themes)]
+        self._set_setting("pronunciation_themes", themes)
+        pronunciation.set_themes(themes)
+        self.preview.dictionary_changed()
+        log.info("Dicionário temático %s: %s", pronunciation.THEMES[name], "ligado" if enabled else "desligado")
+
+    # ---- traducao ------------------------------------------------------------------
+
+    def translate_current(self, target: str, bilingual: bool) -> None:
+        key = self._current_key()
+        if not key or key not in self.loaded:
+            return
+        self.preview.commit_edits()
+        original = self.originals.get(key) or self.loaded[key]
+        source = original.language
+        if not translation.is_installed(source, target):
+            answer = QMessageBox.question(
+                self,
+                "Traduzir",
+                f"O modelo de tradução {LANGUAGES[source].lower()} → {LANGUAGES[target].lower()} "
+                f"ainda não foi baixado (cerca de {translation.PACKAGE_MB} MB, uma vez só).\n\n"
+                "Abrir “Idiomas e vozes” para baixar?",
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                self.open_languages()
+            if not translation.is_installed(source, target):
+                return
+        self.preview.set_document(None, f"Traduzindo para {LANGUAGES[target].lower()}…")
+        self._set_status(key, "traduzindo")
+        worker = Worker(translation.translate_document, original, target, bilingual=bilingual, with_progress=True)
+        worker.signals.progress.connect(lambda message, k=key: self._on_translate_progress(k, message))
+        self._run(
+            worker,
+            lambda document, k=key, o=original: self._on_translated(k, o, document),
+            lambda message, k=key: self._on_translate_failed(k, message),
+        )
+
+    def _on_translate_progress(self, key: str, message: str) -> None:
+        if self._current_key() == key:
+            self.preview.set_document(None, message)
+
+    def _on_translated(self, key: str, original: Document, document: Document) -> None:
+        if key not in self.loaded:
+            return  # removido durante a traducao
+        self.originals[key] = original
+        self.loaded[key] = document
+        self._set_status(key, f"traduzido p/ {LANGUAGES[document.language].lower()}")
+        if self._current_key() == key:
+            self.preview.set_document(document)
+        self._load_voices()
+
+    def _on_translate_failed(self, key: str, message: str) -> None:
+        self._set_status(key, None)
+        if self._current_key() == key:
+            self.preview.set_document(self.loaded.get(key))
+        QMessageBox.warning(self, "Traduzir", message)
+
+    def restore_original(self) -> None:
+        key = self._current_key()
+        if key in self.originals:
+            self.loaded[key] = self.originals.pop(key)
+            self._set_status(key, None)
+            self.preview.set_document(self.loaded[key])
+            self._load_voices()
+            log.info("%s: de volta ao original.", Path(key).name)
+
+    def open_languages(self) -> None:
+        def changed() -> None:
+            self._load_voices()
+            self.check_dependencies(show_dialog=False)
+
+        LanguagesDialog(self.provider, self.settings, changed, self).exec()
+
+    def import_dictionary(self) -> None:
+        start = self.settings.last_open_dir or str(Path.home())
+        file, _ = QFileDialog.getOpenFileName(
+            self, "Importar dicionário de pronúncia", start,
+            "Dicionários (*.dic *.pls *.xml *.csv *.tsv *.txt);;NVDA (*.dic);;PLS (*.pls *.xml);;Planilha (*.csv *.tsv *.txt)",
+        )
+        if not file:
+            return
+        try:
+            result = dictionary_import.parse_file(Path(file))
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Importar dicionário", str(exc))
+            return
+        if not result.entries:
+            reasons = "; ".join(why for _, why in result.skipped[:3])
+            QMessageBox.information(
+                self, "Importar dicionário",
+                "Nenhuma pronúncia aproveitável neste arquivo." + (f" ({reasons})" if reasons else ""),
+            )
+            return
+        dialog = ImportDialog(Path(file), result, dictionary_import.plan_import(result.entries), self)
+        if not dialog.exec():
+            return
+        entries = dialog.entries_to_save()
+        if entries:
+            save_user_entries(entries)
+            self.preview.dictionary_changed()
+        log.info("Dicionário importado de %s: %d pronúncia(s) gravada(s).", Path(file).name, len(entries))
+        self.statusBar().showMessage(f"{len(entries)} pronúncia(s) importada(s) para o seu dicionário.", 8000)
 
     def edit_dictionary(self) -> None:
         path = ensure_user_dictionary()

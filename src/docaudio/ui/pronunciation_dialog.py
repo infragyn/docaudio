@@ -5,13 +5,11 @@ from collections.abc import Callable
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
-    QDialogButtonBox,
     QFormLayout,
-    QLabel,
+    QHBoxLayout,
     QLineEdit,
     QPushButton,
     QStyle,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -24,37 +22,47 @@ class PronunciationDialog(QDialog):
     def __init__(self, term: str, current: str, on_listen: Callable[[str], None], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Corrigir pronúncia")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(480)
         self.on_listen = on_listen
-
-        layout = QVBoxLayout(self)
-        hint = QLabel(
+        body = theme.dialog_body(
+            self,
+            "Corrigir pronúncia",
             "Escreva como a palavra deve soar, do jeito que se fala. "
-            "Ex.: “SQL” → “esse quê éle”, “backup” → “békap”."
+            "Ex.: “SQL” → “ésse quê éle”, “backup” → “békap”. Vale para todos os documentos.",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume),
         )
-        hint.setWordWrap(True)
-        theme.set_role(hint, "muted")
-        layout.addWidget(hint)
 
+        box, box_layout = theme.card()
         form = QFormLayout()
+        form.setHorizontalSpacing(12)
         self.term_edit = QLineEdit(term)
         form.addRow("Termo:", self.term_edit)
         self.spoken_edit = QLineEdit(current)
         self.spoken_edit.selectAll()
         form.addRow("Falar como:", self.spoken_edit)
+        box_layout.addLayout(form)
         self.case_check = QCheckBox("Só quando escrito exatamente assim (maiúsculas e minúsculas)")
+        self.case_check.setToolTip("Útil para siglas que também são palavras, como SEI e “sei”.")
         self.case_check.setChecked(term.isupper() and len(term) <= 5)
-        form.addRow("", self.case_check)
-        layout.addLayout(form)
+        box_layout.addWidget(self.case_check)
+        body.addWidget(box)
 
+        footer = QHBoxLayout()
         self.listen_button = QPushButton("Ouvir")
         self.listen_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume))
+        self.listen_button.setToolTip("Ouve como vai ficar, antes de salvar.")
         self.listen_button.clicked.connect(lambda: self.on_listen(self.spoken_edit.text()))
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.addButton(self.listen_button, QDialogButtonBox.ButtonRole.ActionRole)
-        buttons.accepted.connect(self._accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        cancel = QPushButton("Cancelar")
+        cancel.clicked.connect(self.reject)
+        save = QPushButton("Salvar")
+        save.setDefault(True)
+        theme.set_role(save, "primary")
+        save.clicked.connect(self._accept)
+        footer.addWidget(self.listen_button)
+        footer.addStretch(1)
+        footer.addWidget(cancel)
+        footer.addWidget(save)
+        body.addLayout(footer)
         self.spoken_edit.setFocus()
 
     def _accept(self) -> None:

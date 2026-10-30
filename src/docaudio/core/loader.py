@@ -5,7 +5,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from docaudio.core.chapters import build_chapters
-from docaudio.core.dependencies import find_tessdata
+from docaudio.core.dependencies import find_tessdata, ocr_language_code
+from docaudio.core.language import LANGUAGES, detect_language
 from docaudio.core.model import Block, BlockType, Document
 from docaudio.core.rules import apply_rules
 from docaudio.extractors.base import ExtractionError
@@ -31,9 +32,10 @@ def load_document(path: Path, settings: Settings, progress: Callable[[str], None
 
         ocr = None
         if settings.ocr_enabled:
-            tessdata = find_tessdata(settings)
+            code = ocr_language_code(settings)
+            tessdata = find_tessdata(settings, code)
             if tessdata:
-                ocr = OcrOptions(tessdata, settings.ocr_language)
+                ocr = OcrOptions(tessdata, code)
         extraction = extract_pdf(path, ocr, progress)
     elif suffix in (".txt", ".html", ".htm", ".xhtml", ".epub", ".pptx"):
         from docaudio.extractors import text_formats
@@ -49,15 +51,22 @@ def load_document(path: Path, settings: Settings, progress: Callable[[str], None
 
     blocks = classify_blocks(extraction.blocks)
     document = extraction.document
-    if settings.restore_accents:
+    if settings.document_language in LANGUAGES:
+        document.language = settings.document_language
+    else:
+        sample = " ".join(b.text for b in blocks if b.type != BlockType.CODE)
+        document.language = detect_language(sample)
+    # A correcao de acentos conhece so palavras em portugues.
+    if settings.restore_accents and document.language == "pt":
         _restore_accents(document, blocks)
     document.chapters = build_chapters(blocks, max_chars=settings.max_chapter_chars)
     apply_rules(document, settings)
     log.info(
-        "%s: %d capítulo(s), %d caracteres narráveis.",
+        "%s: %d capítulo(s), %d caracteres narráveis, idioma %s.",
         path.name,
         len(document.chapters),
         document.char_count(),
+        LANGUAGES[document.language].lower(),
     )
     for warning in document.warnings:
         log.warning("%s: %s", path.name, warning)
