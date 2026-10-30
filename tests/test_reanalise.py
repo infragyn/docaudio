@@ -167,16 +167,29 @@ def test_frase_curta_fica_inteira():
     assert translation.split_long("A pilha segue LIFO.") == ["A pilha segue LIFO."]
 
 
+def test_traducao_degenerada_e_refeita_em_partes_menores(monkeypatch):
+    translator = translation.Translator()
+
+    def fake(sentences, src, dst):
+        return [s * 4 if len(s) > 150 else s.upper() for s in sentences]  # repete em trechos longos
+
+    monkeypatch.setattr(translator, "translate_sentences", fake)
+    sentence = ", ".join(f"item {i} do edital" for i in range(14)) + "."
+    assert 150 < len(sentence) <= translation.MAX_PIECE_CHARS
+    assert translator.translate_text(sentence, "pt", "en") == sentence.upper()
+
+
 PROJECT_MODELS = paths.project_root() / "data" / "traducao"
 
 
 @pytest.mark.skipif(not (PROJECT_MODELS / "pt_en" / "model" / "model.bin").is_file(), reason="modelo pt→en não baixado")
 def test_traducao_real_de_frase_longa_mantem_os_itens(monkeypatch):
     monkeypatch.setattr(translation, "pair_dir", lambda src, dst: PROJECT_MODELS / f"{src}_{dst}")
-    sentence = ", ".join(f"o item {i} do edital deve ser verificado pelo candidato" for i in range(40)) + "."
+    # Enumeracao curta: era a que fazia o modelo seguir contando itens que nao existem.
+    sentence = ", ".join(f"o item {i} do edital deve ser verificado" for i in range(30)) + "."
     text = translation.Translator().translate_text(sentence, "pt", "en")
-    assert len(re.findall(r"\b\d+\b", text)) >= 36  # quase todos os 40 numeros continuam la
-    assert len(text) > len(sentence) * 0.6
+    assert text.lower().count("item") == 30
+    assert {int(n) for n in re.findall(r"\b\d+\b", text)} == set(range(30))
 
 
 # ---- empacotamento ------------------------------------------------------------------

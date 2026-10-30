@@ -42,6 +42,8 @@ UNTRANSLATED = {BlockType.CODE, BlockType.URL, BlockType.TOC}
 BATCH = 16
 # Acima disso o modelo repete e perde trechos, sem avisar: a frase vai em partes.
 MAX_PIECE_CHARS = 300
+# Trechos abaixo disso nao sao verificados nem partidos de novo.
+MIN_CHECK_CHARS = 100
 
 Progress = Callable[[str], None]
 
@@ -145,6 +147,11 @@ def split_long(sentence: str, limit: int = MAX_PIECE_CHARS) -> list[str]:
     return pieces
 
 
+def _looks_degenerate(source: str, translated: str) -> bool:
+    """Tamanho muito diferente do original indica que o modelo repetiu ou cortou texto."""
+    return len(translated) > len(source) * 1.8 or len(translated) < len(source) * 0.35
+
+
 class Translator:
     """Carrega cada modelo uma vez; uma traducao por vez (o CTranslate2 ja usa varios nucleos)."""
 
@@ -214,6 +221,16 @@ class Translator:
                 self._save_cache()
             return [self._cache[self._key(src, dst, s)] for s in sentences]
 
+    def _translate_checked(self, pieces: list[str], src: str, dst: str, limit: int = MAX_PIECE_CHARS) -> list[str]:
+        """Traduz e refaz em partes menores o que saiu degenerado (ex.: listas numeradas repetitivas)."""
+        results = self.translate_sentences(pieces, src, dst)
+        for index, (piece, text) in enumerate(zip(pieces, results)):
+            if len(piece) >= MIN_CHECK_CHARS and limit > MIN_CHECK_CHARS and _looks_degenerate(piece, text):
+                smaller = split_long(piece, limit // 2)
+                if len(smaller) > 1:
+                    results[index] = " ".join(self._translate_checked(smaller, src, dst, limit // 2))
+        return results
+
     def translate_text(self, text: str, src: str, dst: str) -> str:
         """Traduz frase a frase, mantendo as quebras de linha (linhas de tabela, itens)."""
         lines = text.split("\n")
@@ -222,7 +239,7 @@ class Translator:
             for line in lines
         ]
         flat = [sentence for line in pieces for sentence in line]
-        translated = iter(self.translate_sentences(flat, src, dst)) if flat else iter(())
+        translated = iter(self._translate_checked(flat, src, dst)) if flat else iter(())
         return "\n".join(" ".join(next(translated) for _ in line) for line in pieces)
 
 
