@@ -24,6 +24,8 @@ datas += collect_data_files("kokoro_onnx") + collect_data_files("espeakng_loader
 binaries += collect_dynamic_libs("espeakng_loader")
 # Traducao offline: DLLs do CTranslate2 (os modelos ficam em dados/traducao, baixados sob demanda).
 binaries += collect_dynamic_libs("ctranslate2")
+# Aba Player: decodificadores do PyAV (ficam em av.libs, ao lado do pacote).
+binaries += collect_dynamic_libs("av")
 
 # Voz padrao, binarios (ffmpeg.exe), dicionarios e dados de OCR vao junto do executavel.
 for sub in ("voices", "bin", "pronunciation", "tessdata", "tessdata_best"):

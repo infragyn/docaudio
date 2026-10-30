@@ -66,6 +66,7 @@ from docaudio.text_processing.pronunciation import ensure_user_dictionary, load_
 from docaudio.ui.conversion_worker import ConversionWorker, QueueItem
 from docaudio.audio.playback import PlaybackError
 from docaudio.ui.player import PlayerDialog
+from docaudio.ui.player_panel import PlayerPanel
 from docaudio.ui.preview import PreviewPanel
 from docaudio.ui.watch import FolderWatcher
 from docaudio.ui.pronunciation_dialog import PronunciationDialog
@@ -268,8 +269,10 @@ class MainWindow(QMainWindow):
         self.options_tabs.addTab(self._build_voice_group(), "Voz e saída")
         self.options_tabs.addTab(self._build_reading_group(), "Leitura")
         self.options_tabs.addTab(self._build_conversion_group(), "Áudio")
+        self.player_panel = PlayerPanel(self.settings, self._set_setting)
+        self.options_tabs.addTab(self.player_panel, "Player")
         tab = self.settings.options_tab
-        self.options_tabs.setCurrentIndex(tab if isinstance(tab, int) and 0 <= tab < 3 else 0)
+        self.options_tabs.setCurrentIndex(tab if isinstance(tab, int) and 0 <= tab < self.options_tabs.count() else 0)
         self.options_tabs.currentChanged.connect(lambda i: self._set_setting("options_tab", i))
         left_layout.addWidget(self.options_tabs)
         # Rolagem so como ultimo recurso em telas muito baixas.
@@ -534,8 +537,8 @@ class MainWindow(QMainWindow):
         self.format_combo = self._compact_combo()
         for value, label in (
             ("mp3", "MP3, um arquivo por capítulo"),
-            ("m4a", "Audiolivro M4A com capítulos (abre no Windows)"),
-            ("m4b", "Audiolivro M4B com capítulos (apps de audiolivro)"),
+            ("m4a", "Audiolivro M4A (abre no Windows)"),
+            ("m4b", "Audiolivro M4B (apps de audiolivro)"),
             ("wav", "WAV sem compressão (não precisa de FFmpeg)"),
         ):
             self.format_combo.addItem(label, value)
@@ -1267,6 +1270,7 @@ class MainWindow(QMainWindow):
             self.open_player(Path(folder))
 
     def open_player(self, folder: Path) -> None:
+        self.player_panel.pause()
         if self.player_dialog is not None:
             self.player_dialog.close()
         try:
@@ -1597,6 +1601,7 @@ class MainWindow(QMainWindow):
                 return
             self.conversion.cancel.set()
         self.preview.commit_edits()
+        self.player_panel.shutdown()
         audio_player.stop()
         if self.player_dialog is not None:
             self.player_dialog.close()

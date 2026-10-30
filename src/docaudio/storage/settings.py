@@ -66,8 +66,11 @@ class Settings:
     watch_enabled: bool = False
     # Lista de documentos da ultima sessao, reaberta ao iniciar.
     documents: list[str] = field(default_factory=list)
-    # Aba de opcoes aberta por ultimo (0 = Voz e saida, 1 = Leitura, 2 = Audio).
+    # Aba de opcoes aberta por ultimo (0 = Voz e saida, 1 = Leitura, 2 = Audio, 3 = Player).
     options_tab: int = 0
+    # Aba Player: ultimo arquivo aberto e velocidade.
+    player_file: str = ""
+    player_speed: float = 1.0
 
     def __post_init__(self) -> None:
         try:

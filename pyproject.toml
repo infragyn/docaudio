@@ -16,6 +16,8 @@ dependencies = [
     "kokoro-onnx>=0.4",
     # Gravacao da voz a clonar e player do audiolivro (o PySide6-Essentials nao tem QtMultimedia).
     "sounddevice>=0.4",
+    # Decodificadores da aba Player (FFmpeg LGPL embutido): MP3, AAC, FLAC, Ogg, Opus, WMA...
+    "av>=14",
     "numpy>=1.24",
     # Traducao offline (modelos Argos/OPUS-MT executados sem PyTorch).
     "ctranslate2>=4.4",
