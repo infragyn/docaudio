@@ -246,6 +246,17 @@ class Translator:
 _translator = Translator()
 
 
+def translate_plain(text: str, source: str, target: str, progress: Progress | None = None) -> str:
+    """Texto avulso, linha a linha para mostrar o andamento; a quebra de linha se mantem."""
+    lines = text.split("\n")
+    result = []
+    for index, line in enumerate(lines, 1):
+        result.append(_translator.translate_text(line, source, target))
+        if progress and index % 10 == 0:
+            progress(f"Traduzindo… {index * 100 // len(lines)}%")
+    return "\n".join(result)
+
+
 def translate_document(
     document: Document, target: str, progress: Progress | None = None, bilingual: bool = False
 ) -> Document:

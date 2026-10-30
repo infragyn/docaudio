@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 
 from docaudio import APP_NAME, __version__
 from docaudio.core import dependencies, documents, paths
-from docaudio.core.conversion import Interrupted, find_interrupted
+from docaudio.core.conversion import Interrupted, find_interrupted, safe_filename
 from docaudio.core.language import AUTO as AUTO_LANGUAGE
 from docaudio.core.language import DEFAULT as DEFAULT_LANGUAGE
 from docaudio.core.language import LANGUAGES, detect_language, language_of_voice, phrase
@@ -51,7 +51,7 @@ from docaudio.core.loader import (
     load_document,
 )
 from docaudio.core.model import BlockType, Document
-from docaudio.core import translation
+from docaudio.core import text_export, translation
 from docaudio.core.rules import apply_rules
 from docaudio.speech import clone_provider
 from docaudio.speech.registry import VoiceRegistry
@@ -67,6 +67,7 @@ from docaudio.ui.conversion_worker import ConversionWorker, QueueItem
 from docaudio.audio.playback import PlaybackError
 from docaudio.ui.player import PlayerDialog
 from docaudio.ui.player_panel import PlayerPanel
+from docaudio.ui.translate_dialog import SAVE_FILTER, TranslateDialog
 from docaudio.ui.preview import PreviewPanel
 from docaudio.ui.watch import FolderWatcher
 from docaudio.ui.pronunciation_dialog import PronunciationDialog
@@ -140,6 +141,7 @@ class MainWindow(QMainWindow):
         self.interrupted: dict[str, Interrupted] = {}
         self.tray: QSystemTrayIcon | None = None
         self.player_dialog: PlayerDialog | None = None
+        self.text_translator: TranslateDialog | None = None
 
         self.setWindowTitle(f"{APP_NAME} — Documentos para áudio")
         self.resize(1280, 800)
@@ -194,6 +196,10 @@ class MainWindow(QMainWindow):
         languages_action.setToolTip("Vozes e OCR para documentos em português, inglês e espanhol.")
         languages_action.triggered.connect(self.open_languages)
         tools_menu.addAction(languages_action)
+        translate_action = QAction("&Traduzir texto…", self)
+        translate_action.setShortcut("Ctrl+T")
+        translate_action.triggered.connect(lambda: self.open_text_translator())
+        tools_menu.addAction(translate_action)
         tools_menu.addSeparator()
         watch_choose = QAction("Escolher pasta &vigiada…", self)
         watch_choose.setToolTip("Documentos novos colocados nessa pasta são convertidos sozinhos, com a voz atual.")
@@ -294,6 +300,8 @@ class MainWindow(QMainWindow):
         self.preview.review_requested.connect(self.open_pronunciation_review)
         self.preview.translate_requested.connect(self.translate_current)
         self.preview.restore_requested.connect(self.restore_original)
+        self.preview.save_translation_requested.connect(self.save_translation)
+        self.preview.text_translator_requested.connect(self.open_text_translator)
 
         top_widget = QSplitter(Qt.Orientation.Horizontal)
         top_widget.addWidget(left)
@@ -1507,6 +1515,39 @@ class MainWindow(QMainWindow):
             self.preview.set_document(self.loaded[key])
             self._load_voices()
             log.info("%s: de volta ao original.", Path(key).name)
+
+    def save_translation(self) -> None:
+        """Guarda em arquivo o documento traduzido, com as correcoes feitas na previa."""
+        key = self._current_key()
+        document = self.loaded.get(key) if key else None
+        if document is None or not document.translated_from:
+            return
+        self.preview.commit_edits()
+        name = f"{safe_filename(document.title or document.source.stem)} ({document.language}).docx"
+        chosen, selected = QFileDialog.getSaveFileName(
+            self, "Salvar tradução", str(self.settings.resolved_output_dir() / name), SAVE_FILTER
+        )
+        if chosen:
+            self._write_translation(document, Path(chosen), selected)
+
+    def _write_translation(self, document: Document, path: Path, selected: str = "") -> None:
+        if path.suffix.lower() not in (".docx", ".txt"):
+            path = path.with_name(path.name + (".txt" if "txt" in selected else ".docx"))
+        try:
+            text_export.save_text(path, document.title, text_export.document_sections(document))
+        except OSError as exc:
+            QMessageBox.warning(self, "Salvar tradução", f"Não foi possível salvar {path.name}: {exc}")
+            return
+        log.info("Tradução salva em %s", path)
+
+    def open_text_translator(self) -> None:
+        if self.text_translator is None:
+            self.text_translator = TranslateDialog(
+                self.settings.resolved_output_dir, self.open_languages, lambda path: self.add_documents([path]), self
+            )
+        self.text_translator.show()
+        self.text_translator.raise_()
+        self.text_translator.activateWindow()
 
     def open_languages(self) -> None:
         def changed() -> None:

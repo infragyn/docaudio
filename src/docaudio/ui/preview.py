@@ -64,6 +64,8 @@ class PreviewPanel(QGroupBox):
     # idioma de destino, bilingue
     translate_requested = Signal(str, bool)
     restore_requested = Signal()
+    save_translation_requested = Signal()
+    text_translator_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Prévia", parent)
@@ -321,6 +323,13 @@ class PreviewPanel(QGroupBox):
         back = self.translate_menu.addAction(f"Voltar ao original ({LANGUAGES[original].lower()})")
         back.setEnabled(bool(document.translated_from))
         back.triggered.connect(self.restore_requested)
+        save = self.translate_menu.addAction("Salvar tradução em arquivo…")
+        save.setToolTip("Guarda o texto traduzido em Word ou TXT, sem gerar áudio.")
+        save.setEnabled(bool(document.translated_from))
+        save.triggered.connect(self.save_translation_requested)
+        self.translate_menu.addSeparator()
+        free = self.translate_menu.addAction("Traduzir outro texto…")
+        free.triggered.connect(self.text_translator_requested)
 
     def dictionary_changed(self) -> None:
         """Recarrega o dicionario de pronuncia (ex.: depois de corrigir um termo)."""
