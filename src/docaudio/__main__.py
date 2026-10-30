@@ -221,7 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     converter = sub.add_parser("converter", help="converte documentos em áudio (retoma conversões interrompidas)")
     converter.add_argument("arquivos", nargs="+")
     converter.add_argument("--saida", help="pasta de saída")
-    converter.add_argument("--formato", choices=["mp3", "m4b", "wav"])
+    converter.add_argument("--formato", choices=["mp3", "m4a", "m4b", "wav"])
     converter.add_argument("--capitulos", help="números dos capítulos, ex.: 1,3,4")
     converter.add_argument("--voz")
     converter.add_argument("--velocidade", type=float)

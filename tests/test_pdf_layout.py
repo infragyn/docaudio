@@ -1,4 +1,5 @@
 import pymupdf
+import pytest
 
 from docaudio.extractors.pdf_extractor import (
     Line,
@@ -114,3 +115,17 @@ def test_split_paragraphs_by_gap_and_font_change():
         line("novo parágrafo", 50, 170),
     )
     assert [p.text for p in split_paragraphs(raw)] == ["Título", "primeira linha segunda linha", "novo parágrafo"]
+
+
+@pytest.mark.parametrize(
+    ("title", "generic"),
+    [
+        ("Slide 1", True), ("slide 12", True), ("Diapositivo 3", True), ("Apresentação do PowerPoint", True),
+        ("PowerPoint Presentation", True), ("Sem título", True), ("Documento1", True),
+        ("Slide de Estruturas de Dados", False), ("Apresentação de Resultados 2026", False), ("Listas e Filas", False),
+    ],
+)
+def test_titulo_automatico_do_powerpoint_nao_vale_como_titulo(title, generic):
+    from docaudio.extractors.pdf_extractor import GENERIC_TITLE
+
+    assert bool(GENERIC_TITLE.match(title)) is generic

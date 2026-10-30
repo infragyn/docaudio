@@ -32,6 +32,12 @@ MAX_HEADING_CHARS = 150
 # que nao informa negrito e estima o tamanho da fonte com ruido.
 NUMBERED_HEADING = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]")
 MAX_OCR_HEADING_CHARS = 80
+# Titulos que o PowerPoint e o Word gravam sozinhos ("Slide 1"): nao dizem nada do documento.
+GENERIC_TITLE = re.compile(
+    r"^(slide|diapositivo|documento|document|apresenta[çc][ãa]o|presentation)\s*\d*$"
+    r"|^(apresenta[çc][ãa]o do powerpoint|powerpoint presentation|sem t[íi]tulo|untitled)\b",
+    re.IGNORECASE,
+)
 
 log = logging.getLogger(__name__)
 
@@ -395,7 +401,7 @@ def guess_title(blocks: list[Block], path: Path) -> str:
         text = block.text.strip()
         if 8 <= len(text) <= 120 and not re.match(r"\d", text) and block.type in (BlockType.HEADING, BlockType.PARAGRAPH):
             if block.type == BlockType.HEADING or not _has_lowercase(text):
-                return text
+                return text.rstrip(" :")
     heading = next((b.text for b in blocks if b.type == BlockType.HEADING and b.level == 1), None)
     return heading or _prettify_filename(path.stem)
 
@@ -536,7 +542,11 @@ def extract_pdf(
     blocks = split_caps_headings(blocks)
 
     # Navegadores e conversores gravam o nome do arquivo como titulo: nao serve.
-    if re.search(r"\.(pdf|docx?|odt)$", metadata_title, re.IGNORECASE) or metadata_title in (path.name, path.stem):
+    if (
+        re.search(r"\.(pdf|docx?|odt)$", metadata_title, re.IGNORECASE)
+        or metadata_title in (path.name, path.stem)
+        or GENERIC_TITLE.match(metadata_title)
+    ):
         metadata_title = ""
     title = metadata_title or guess_title(blocks, path)
     scanned = len(ocr_pages) + len(without_text)

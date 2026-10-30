@@ -210,7 +210,7 @@ needs_ffmpeg = pytest.mark.skipif(find_ffmpeg() is None, reason="FFmpeg não ins
 
 
 @needs_ffmpeg
-@pytest.mark.parametrize("fmt", ["mp3", "m4b"])
+@pytest.mark.parametrize("fmt", ["mp3", "m4a", "m4b"])
 def test_real_ffmpeg_outputs(tmp_path, fmt):
     settings = Settings(output_dir=str(tmp_path / "saida"), output_format=fmt)
     result = job(make_document(tmp_path), settings, FakeProvider()).run()

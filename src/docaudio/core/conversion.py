@@ -3,7 +3,7 @@
 Estrutura na pasta de saida:
 
     <saida>/<titulo do documento>/
-        01 - Capitulo.mp3 ...           (ou <titulo>.m4b)
+        01 - Capitulo.mp3 ...           (ou <titulo>.m4a, <titulo>.m4b)
         .docaudio/manifest.json         estado para retomar
         .docaudio/trechos/<hash>.wav    temporarios, apagados ao concluir
         .docaudio/capitulos/<hash>.wav  temporarios, apagados ao concluir
@@ -305,9 +305,9 @@ class ConversionJob:
     def run(self) -> ConversionResult:
         s = self.settings
         ffmpeg = find_ffmpeg(s.ffmpeg_path)
-        if s.output_format in ("mp3", "m4b") and not ffmpeg:
+        if s.output_format in ("mp3", "m4a", "m4b") and not ffmpeg:
             raise ConversionError(
-                "FFmpeg não encontrado: necessário para gerar MP3 ou M4B. "
+                "FFmpeg não encontrado: necessário para gerar MP3, M4A ou M4B. "
                 "Instale o FFmpeg ou escolha a saída em WAV."
             )
         planned = self.plan()
@@ -337,7 +337,7 @@ class ConversionJob:
             self.document.source.name, count, self._total, s.output_format, s.voice,
         )
         try:
-            if s.output_format == "m4b":
+            if s.output_format in ("m4a", "m4b"):
                 self._run_m4b(planned, manifest, previous, ffmpeg, result)
             else:
                 self._run_per_chapter(planned, manifest, previous, ffmpeg, result)
@@ -409,7 +409,7 @@ class ConversionJob:
     def _run_m4b(self, planned, manifest, previous, ffmpeg, result) -> None:
         count = len(planned)
         final_hash = _hash([p.hash for p in planned], [p.chapter.title for p in planned])
-        output = self.folder / fit_name(self.folder, safe_filename(self.document.title or self.document.source.stem), "m4b")
+        output = self.folder / fit_name(self.folder, safe_filename(self.document.title or self.document.source.stem), self.settings.output_format)
         if previous and previous.final_hash == final_hash and output.exists():
             for state in manifest.chapters:
                 state.status = "concluido"
@@ -429,7 +429,7 @@ class ConversionJob:
             start += self._durations.get(item.hash, 0.0)
             manifest.save(self.manifest_path)
         self._check_cancel()
-        self._report(planned[-1], count, "Gerando audiolivro M4B")
+        self._report(planned[-1], count, f"Gerando audiolivro {output.suffix[1:].upper()}")
         ffmpeg_audio.encode_m4b(
             ffmpeg, wavs, [p.chapter.title for p in planned], output,
             self._metadata(self.document.title), self.work, self.cancel, self._cover(),

@@ -534,7 +534,8 @@ class MainWindow(QMainWindow):
         self.format_combo = self._compact_combo()
         for value, label in (
             ("mp3", "MP3, um arquivo por capítulo"),
-            ("m4b", "Audiolivro M4B com capítulos"),
+            ("m4a", "Audiolivro M4A com capítulos (abre no Windows)"),
+            ("m4b", "Audiolivro M4B com capítulos (apps de audiolivro)"),
             ("wav", "WAV sem compressão (não precisa de FFmpeg)"),
         ):
             self.format_combo.addItem(label, value)
@@ -1092,7 +1093,7 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.question(
                 self,
                 "FFmpeg não encontrado",
-                "O FFmpeg é necessário para gerar MP3 ou M4B e não foi encontrado.\n\n"
+                "O FFmpeg é necessário para gerar MP3, M4A ou M4B e não foi encontrado.\n\n"
                 "Deseja converter em WAV desta vez?",
             )
             if answer != QMessageBox.StandardButton.Yes:

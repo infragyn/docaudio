@@ -14,7 +14,7 @@ DEFAULT_VOICE = "pt_BR-faber-medium"
 DEFAULT_VOICES = {"en": "kokoro:af_heart", "es": "kokoro:ef_dora"}
 MIN_SPEED = 0.5
 MAX_SPEED = 2.0
-OUTPUT_FORMATS = ("mp3", "m4b", "wav")
+OUTPUT_FORMATS = ("mp3", "m4a", "m4b", "wav")
 
 
 @dataclass
@@ -43,7 +43,8 @@ class Settings:
     tessdata_dir: str = ""
     # Capitulos maiores que isto sao divididos em partes (0 = sem limite).
     max_chapter_chars: int = 0
-    # Saida: "mp3" (um arquivo por capitulo), "m4b" (audiolivro unico) ou "wav" (sem FFmpeg).
+    # Saida: "mp3" (um arquivo por capitulo), "m4a" ou "m4b" (audiolivro unico) ou "wav" (sem FFmpeg).
+    # M4A e M4B sao o mesmo arquivo; so o M4A abre nos players do Windows.
     output_format: str = "mp3"
     announce_titles: bool = True
     sentence_pause_ms: int = 250
