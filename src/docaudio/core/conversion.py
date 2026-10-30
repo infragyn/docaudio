@@ -110,6 +110,9 @@ class Interrupted:
     done_segments: int
     total_segments: int
     updated_at: str
+    language: str = ""
+    translated_from: str = ""
+    bilingual: bool = False
 
     @property
     def fraction(self) -> float:
@@ -142,6 +145,9 @@ def find_interrupted(output_dir: Path) -> list[Interrupted]:
                 done_segments=len(pieces),
                 total_segments=sum(c.segments for c in manifest.chapters),
                 updated_at=manifest.updated_at,
+                language=manifest.language,
+                translated_from=manifest.translated_from,
+                bilingual=manifest.bilingual,
             )
         )
     return sorted(found, key=lambda item: item.updated_at, reverse=True)
@@ -317,6 +323,9 @@ class ConversionJob:
             speed=s.speed,
             format=s.output_format,
             chapters=[ChapterState(p.track, p.chapter.title, p.hash, segments=len(p.segments)) for p in planned],
+            language=self.document.language,
+            translated_from=self.document.translated_from,
+            bilingual=self.document.bilingual,
         )
         # Gravado ja no inicio: se o programa fechar no meio, a conversao aparece para retomar.
         manifest.save(self.manifest_path)

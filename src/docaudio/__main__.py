@@ -125,7 +125,9 @@ def cmd_converter(args: argparse.Namespace, settings: Settings) -> int:
                     last[0] = percent
                     print(f"\r  {percent:3d}%  {p.message[:70]:<70}", end="", flush=True)
 
-            result = ConversionJob(document, settings, VoiceRegistry(), progress=progress).run()
+            # --voz vale para tudo; sem ela, cada documento usa a voz do seu idioma.
+            voiced = settings if args.voz else settings.for_language(document.language)
+            result = ConversionJob(document, voiced, VoiceRegistry(), progress=progress).run()
             print()
             reused = f" ({result.reused_chapters} reaproveitado(s))" if result.reused_chapters else ""
             print(f"{document.source.name}: {len(result.files)} arquivo(s){reused} em {result.folder}")

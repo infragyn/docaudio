@@ -1307,7 +1307,9 @@ class MainWindow(QMainWindow):
 
     def refresh_interrupted(self, announce: bool = False) -> None:
         """Procura na pasta de saida conversoes que pararam no meio."""
-        self.interrupted = {str(item.document): item for item in find_interrupted(self.settings.resolved_output_dir())}
+        # Do mais antigo ao mais recente: com duas conversoes do mesmo arquivo, vale a ultima.
+        found = reversed(find_interrupted(self.settings.resolved_output_dir()))
+        self.interrupted = {str(item.document): item for item in found}
         for key in [self.doc_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.doc_list.count())]:
             self._set_item_text(key)
         self._refresh_resume_button()
@@ -1355,15 +1357,35 @@ class MainWindow(QMainWindow):
         self.add_documents([i.document for i in items])
         queue = []
         for interrupted in items:
-            key = str(interrupted.document)
-            # Mesma voz, velocidade e formato da conversao original: os trechos prontos sao reaproveitados.
-            settings = replace(
-                self.settings, voice=interrupted.voice, speed=interrupted.speed, output_format=interrupted.format
-            )
-            queue.append(self._queue_item(key, settings, pick_voice=False))
+            queue.append(self._resume_item(interrupted))
             log.info("Retomando %s (%.0f%% pronto).", interrupted.document.name, interrupted.fraction * 100)
         self._enqueue(queue)
         self._refresh_resume_button()
+
+    def _resume_item(self, interrupted: Interrupted) -> QueueItem:
+        """Mesma voz, velocidade, formato e texto da conversao original: os trechos prontos sao reaproveitados."""
+        key = str(interrupted.document)
+        settings = self.settings
+        if interrupted.language:
+            # Idioma de leitura do arquivo original, e a voz de cada idioma para o modo bilingue.
+            settings = replace(
+                settings.for_language(interrupted.language),
+                document_language=interrupted.translated_from or interrupted.language,
+            )
+        settings = replace(
+            settings, voice=interrupted.voice, speed=interrupted.speed, output_format=interrupted.format
+        )
+        item = self._queue_item(key, settings, pick_voice=False)
+        current = item.document
+        state = (interrupted.language, interrupted.translated_from, interrupted.bilingual)
+        # Manifesto antigo nao tem idioma: segue com o documento aberto, como antes.
+        if interrupted.language and (
+            current is None or (current.language, current.translated_from, current.bilingual) != state
+        ):
+            item.document = None
+            item.translate_to = interrupted.language if interrupted.translated_from else ""
+            item.bilingual = interrupted.bilingual
+        return item
 
     # ---- trava da clonagem ----------------------------------------------------
 

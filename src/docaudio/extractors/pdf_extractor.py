@@ -437,6 +437,8 @@ def ocr_pages_parallel(
                     number = futures[future]
                     try:
                         results[number] = future.result()
+                    except BrokenProcessPool:
+                        raise  # nao e erro da pagina: segue para o OCR pagina a pagina
                     except Exception as exc:
                         log.warning("OCR falhou na página %d de %s: %s", number, path.name, exc)
                     report()

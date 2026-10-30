@@ -75,7 +75,12 @@ def load_document(path: Path, settings: Settings, progress: Callable[[str], None
 
 def _restore_accents(document: Document, blocks: list[Block]) -> None:
     """Corrige palavras digitadas sem acento (ex.: Informacao); codigo e enderecos ficam intactos."""
-    restorer = AccentRestorer([document.title, *(b.text for b in blocks)])
+    # O titulo de um PDF digitalizado tambem vem do OCR.
+    scanned = any(b.ocr for b in blocks)
+    restorer = AccentRestorer(
+        [*([] if scanned else [document.title]), *(b.text for b in blocks if not b.ocr)],
+        [*([document.title] if scanned else []), *(b.text for b in blocks if b.ocr)],
+    )
     for block in blocks:
         if block.type not in (BlockType.CODE, BlockType.URL):
             block.text = restorer.restore(block.text)

@@ -96,25 +96,33 @@ def _match_case(original: str, fixed: str) -> str:
     return fixed
 
 
-def learn_from(texts: Iterable[str]) -> dict[str, str]:
+def learn_from(texts: Iterable[str], uncertain_texts: Iterable[str] = ()) -> dict[str, str]:
     """Forma acentuada de cada palavra que, no documento, aparece mais com acento do que sem.
 
     "Informação" (30x) contra "Informacao" (2x) ensina a correcao; "que" (500x)
     contra "quê" (2x) nao, porque a forma sem acento e a usual.
+
+    `uncertain_texts` vem do OCR, que as vezes inventa acentos ("Artíficial"): la a
+    forma acentuada so ensina se repetir e superar a forma sem acento.
     """
     variants: defaultdict[str, Counter[str]] = defaultdict(Counter)
     plain: Counter[str] = Counter()
-    for text in texts:
-        for word in WORD.findall(text):
-            lower = word.lower()
-            if _has_accent(word):
-                variants[strip_accents(lower)][lower] += 1
-            else:
-                plain[lower] += 1
+    trusted: Counter[str] = Counter()
+    for source, reliable in ((texts, True), (uncertain_texts, False)):
+        for text in source:
+            for word in WORD.findall(text):
+                lower = word.lower()
+                if _has_accent(word):
+                    key = strip_accents(lower)
+                    variants[key][lower] += 1
+                    trusted[key] += reliable
+                else:
+                    plain[lower] += 1
     learned = {}
     for key, counts in variants.items():
         form, count = counts.most_common(1)[0]
-        if sum(counts.values()) >= plain[key]:
+        total = sum(counts.values())
+        if (trusted[key] and total >= plain[key]) or (total >= 2 and total > plain[key]):
             learned[key] = form
     return learned
 
@@ -141,8 +149,8 @@ def restore_word(word: str, learned: dict[str, str] | None = None) -> str:
 class AccentRestorer:
     """Restaura acentos usando o vocabulario acentuado do proprio documento."""
 
-    def __init__(self, document_texts: Iterable[str] = ()) -> None:
-        self.learned = learn_from(document_texts)
+    def __init__(self, document_texts: Iterable[str] = (), uncertain_texts: Iterable[str] = ()) -> None:
+        self.learned = learn_from(document_texts, uncertain_texts)
         self.changes: Counter[tuple[str, str]] = Counter()
 
     def restore(self, text: str) -> str:

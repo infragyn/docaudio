@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 import logging
+import re
 import shutil
 import threading
 import urllib.request
@@ -39,6 +40,8 @@ CREDIT = (
 # Blocos que nao se traduzem: codigo, enderecos e sumario.
 UNTRANSLATED = {BlockType.CODE, BlockType.URL, BlockType.TOC}
 BATCH = 16
+# Acima disso o modelo repete e perde trechos, sem avisar: a frase vai em partes.
+MAX_PIECE_CHARS = 300
 
 Progress = Callable[[str], None]
 
@@ -118,6 +121,30 @@ def install_archive(archive: Path, src: str, dst: str) -> Path:
     return target
 
 
+def split_long(sentence: str, limit: int = MAX_PIECE_CHARS) -> list[str]:
+    """Parte frases longas na pontuacao (ou entre palavras, se nao houver), sem perder texto."""
+    if len(sentence) <= limit:
+        return [sentence]
+    pieces: list[str] = []
+    current = ""
+    for clause in re.split(r"(?<=[,;:])\s+", sentence):
+        while len(clause) > limit:
+            cut = clause.rfind(" ", 0, limit + 1)
+            cut = cut if cut > 0 else limit
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(clause[:cut])
+            clause = clause[cut:].lstrip()
+        if current and len(current) + 1 + len(clause) > limit:
+            pieces.append(current)
+            current = ""
+        current = f"{current} {clause}" if current else clause
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 class Translator:
     """Carrega cada modelo uma vez; uma traducao por vez (o CTranslate2 ja usa varios nucleos)."""
 
@@ -190,7 +217,10 @@ class Translator:
     def translate_text(self, text: str, src: str, dst: str) -> str:
         """Traduz frase a frase, mantendo as quebras de linha (linhas de tabela, itens)."""
         lines = text.split("\n")
-        pieces = [split_sentences(line) or ([line] if line.strip() else []) for line in lines]
+        pieces = [
+            [piece for sentence in split_sentences(line) or ([line] if line.strip() else []) for piece in split_long(sentence)]
+            for line in lines
+        ]
         flat = [sentence for line in pieces for sentence in line]
         translated = iter(self.translate_sentences(flat, src, dst)) if flat else iter(())
         return "\n".join(" ".join(next(translated) for _ in line) for line in pieces)
@@ -234,6 +264,7 @@ def translate_document(
         chapter.blocks = new_blocks
     translated.language = target
     translated.translated_from = source
+    translated.bilingual = bilingual
     log.info(
         "%s traduzido de %s para %s (%d blocos%s).",
         document.source.name, LANGUAGES[source].lower(), LANGUAGES[target].lower(), len(blocks),

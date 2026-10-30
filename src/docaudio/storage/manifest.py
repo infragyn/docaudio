@@ -37,6 +37,10 @@ class Manifest:
     final_output: str = ""
     final_hash: str = ""
     updated_at: str = ""
+    # Estado do documento, para retomar o mesmo texto: o arquivo em `document` e o original.
+    language: str = ""
+    translated_from: str = ""
+    bilingual: bool = False
     version: int = VERSION
 
     def chapter(self, chapter_hash: str) -> ChapterState | None:

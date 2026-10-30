@@ -107,6 +107,8 @@ class Document:
     language: str = "pt"
     # Idioma original quando este documento e uma traducao; "" quando nao e.
     translated_from: str = ""
+    # Traducao bilingue: cada bloco original vem seguido da sua traducao.
+    bilingual: bool = False
 
     def included_chapters(self) -> list[Chapter]:
         return [c for c in self.chapters if c.include]

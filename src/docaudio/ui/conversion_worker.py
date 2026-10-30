@@ -11,6 +11,7 @@ from docaudio.audio.ffmpeg import Cancelled
 from docaudio.core.conversion import ConversionError, ConversionJob, Progress
 from docaudio.core.loader import load_document
 from docaudio.core.model import Document
+from docaudio.core.translation import TranslationError, translate_document
 from docaudio.extractors.base import ExtractionError
 from docaudio.speech.base import SpeechProvider
 from docaudio.storage.settings import Settings
@@ -32,6 +33,9 @@ class QueueItem:
     settings: Settings
     # False quando a voz ja foi escolhida (ex.: retomar com a voz da conversao original).
     pick_voice: bool = True
+    # Ao retomar uma traducao: traduz de novo depois de ler o arquivo (com o cache, e imediato).
+    translate_to: str = ""
+    bilingual: bool = False
 
 
 class ConversionSignals(QObject):
@@ -88,6 +92,8 @@ class ConversionWorker(QRunnable):
             self.signals.document_started.emit(item.key)
             try:
                 document = item.document or load_document(Path(item.key), item.settings)
+                if item.translate_to:
+                    document = translate_document(document, item.translate_to, bilingual=item.bilingual)
                 settings = item.settings
                 if item.document is None and item.pick_voice:
                     # Lido agora: so aqui se sabe o idioma, e com ele a voz.
@@ -103,7 +109,7 @@ class ConversionWorker(QRunnable):
                 with self._lock:
                     self._closed = True
                 break
-            except (ExtractionError, ConversionError) as exc:
+            except (ExtractionError, ConversionError, TranslationError) as exc:
                 log.error("%s", exc)
                 self.signals.document_failed.emit(item.key, str(exc))
             except Exception as exc:

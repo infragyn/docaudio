@@ -9,8 +9,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 ROOT = Path(SPECPATH).parent
 
 # Piper precisa dos dados do espeak-ng; onnxruntime das suas DLLs.
-# Modelos de hebraico/arabe e dicionarios de outros idiomas nao sao usados em pt-BR.
-KEEP_DICTS = {"pt_dict", "en_dict"}
+# Modelos de hebraico/arabe e dicionarios de outros idiomas nao sao usados.
+KEEP_DICTS = {"pt_dict", "en_dict", "es_dict"}
 datas = [
     (src, dest)
     for src, dest in collect_data_files(
