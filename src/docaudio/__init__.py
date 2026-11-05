@@ -3,5 +3,5 @@
 __version__ = "0.1.0"
 APP_NAME = "DocAudio"
 LICENSE_NAME = "GNU AGPL-3.0 ou posterior"
-# Endereco do repositorio publico; preencher quando o projeto for publicado.
-SOURCE_URL = ""
+# Repositorio publico, mostrado no Sobre (a AGPL pede o caminho para o codigo-fonte).
+SOURCE_URL = "https://github.com/infragyn/docaudio"

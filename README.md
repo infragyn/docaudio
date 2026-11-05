@@ -45,7 +45,7 @@ Roda no Windows. Todo o processamento (OCR, voz e tradução) acontece no comput
 
 ## Instalar
 
-**Versão pronta:** baixe o ZIP portátil na página de *Releases*, extraia e abra `DocAudio.exe`. A voz Faber e o OCR em português já vêm junto; outras vozes, idiomas e modelos de tradução são baixados uma vez em *Ferramentas → Idiomas e vozes*.
+**Versão pronta:** baixe o ZIP portátil na página de [Releases](https://github.com/infragyn/docaudio/releases), extraia e abra `DocAudio.exe`. A voz Faber e o OCR em português já vêm junto; outras vozes, idiomas e modelos de tradução são baixados uma vez em *Ferramentas → Idiomas e vozes*.
 
 Para gerar MP3 e M4A/M4B, o programa usa o FFmpeg. Instale com:
 
