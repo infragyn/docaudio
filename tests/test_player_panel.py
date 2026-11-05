@@ -265,3 +265,156 @@ def test_lembra_onde_parou(panel, tmp_path):
 
 def test_reconhece_extensoes(tmp_path):
     assert is_audio(tmp_path / "a.M4B") and is_audio(tmp_path / "a.wma") and not is_audio(tmp_path / "a.pdf")
+
+
+# ---- marcadores, A-B e timer ----------------------------------------------------------
+
+
+def name_dialog(monkeypatch, name, ok=True):
+    monkeypatch.setattr(QtWidgets.QInputDialog, "getText", lambda *a, **k: (name, ok))
+
+
+def test_marcador_guarda_o_ponto_e_volta_ao_clicar(panel, tmp_path, monkeypatch):
+    from docaudio.ui.player import load_bookmarks
+
+    path = write_wav(tmp_path / "aula.wav", 4.0)
+    panel.open_path(path)
+    assert panel.bookmark_list.item(0).text().startswith("Nenhum marcador")
+    panel.player.seek(2.0)
+    name_dialog(monkeypatch, "Parte difícil")
+    panel.add_bookmark()
+    assert panel.bookmark_list.item(0).text() == "0:02 — Parte difícil"
+    assert load_bookmarks(path) == [(2.0, "Parte difícil")]
+
+    panel.player.seek(0.0)
+    panel._on_bookmark_clicked(panel.bookmark_list.item(0))
+    assert panel.player.position == pytest.approx(2.0, abs=0.1)
+
+    name_dialog(monkeypatch, "", ok=False)  # cancelar nao cria marcador
+    panel.add_bookmark()
+    assert len(panel.bookmarks) == 1
+
+    panel.bookmark_list.setCurrentRow(0)
+    assert panel.remove_bookmark_button.isEnabled()
+    panel.remove_bookmark()
+    assert panel.bookmarks == [] and load_bookmarks(path) == []
+
+
+def test_marcador_sem_nome_e_de_outro_arquivo_da_pasta(panel, tmp_path, monkeypatch):
+    write_wav(tmp_path / "01 - um.wav", 2.0)
+    write_wav(tmp_path / "02 - dois.wav", 3.0)
+    panel.open_path(tmp_path / "02 - dois.wav")
+    panel.player.seek(1.5)
+    name_dialog(monkeypatch, "  ")
+    panel.add_bookmark()
+
+    panel.open_path(tmp_path)
+    assert panel.player.info.path.name == "01 - um.wav"
+    assert panel.bookmark_list.item(0).text() == "02 - dois · 0:01"
+    panel._on_bookmark_clicked(panel.bookmark_list.item(0))
+    assert panel.player.info.path.name == "02 - dois.wav"
+    assert panel.player.position == pytest.approx(1.5, abs=0.1)
+
+
+def test_repeticao_a_b_volta_ao_inicio_do_trecho(panel, tmp_path):
+    panel.open_path(write_wav(tmp_path / "a.wav", 3.0))
+    panel.player.seek(1.5)
+    panel.toggle_loop()
+    assert panel.loop_button.text() == "Marcar fim (B)"
+    panel.player.seek(1.6)
+    panel.toggle_loop()  # menos de meio segundo: explica e espera
+    assert panel.loop_b is None and "meio segundo" in panel.tools_status.text()
+    panel.player.seek(0.5)
+    panel.toggle_loop()  # B antes do A: o trecho fica entre os dois
+    assert (panel.loop_a, panel.loop_b) == (pytest.approx(0.5, abs=0.05), pytest.approx(1.5, abs=0.05))
+    assert panel.tools_status.text() == "Repetindo 0:00 – 0:01"
+
+    panel.player.seek(1.6)
+    assert panel._check_loop(panel.player.position) == pytest.approx(0.5, abs=0.05)
+    assert panel.player.position == pytest.approx(0.5, abs=0.05)
+
+    panel.toggle_loop()
+    assert panel.loop_a is None and panel.loop_button.text() == "Repetir trecho (A–B)"
+
+
+def test_repeticao_ate_o_fim_do_arquivo_recomeca_o_trecho(panel, tmp_path):
+    panel.open_path(write_wav(tmp_path / "a.wav", 1.0))
+    panel.player.seek(0.2)
+    panel.toggle_loop()
+    panel.player.seek(1.0)
+    panel.toggle_loop()
+    # O arquivo acabou antes do tique que voltaria ao A: recomeca o trecho em vez de parar.
+    panel.player.finished = True
+    panel._on_finished()
+    assert panel.player.playing
+    assert panel.player.info.path.name == "a.wav" and panel.player.position < 0.5
+
+
+def test_trocar_de_arquivo_desfaz_a_repeticao(panel, tmp_path):
+    panel.open_path(write_wav(tmp_path / "a.wav", 3.0))
+    panel.toggle_loop()
+    panel.open_path(write_wav(tmp_path / "b.wav", 1.0))
+    assert panel.loop_a is None
+
+
+def test_timer_de_desligar_pausa_depois_do_tempo(panel, tmp_path):
+    now = [1000.0]
+    panel.clock = lambda: now[0]
+    panel.open_path(write_wav(tmp_path / "a.wav", 30.0))
+    panel.sleep_combo.setCurrentIndex(panel.sleep_combo.findData(15))
+    assert panel.tools_status.text() == "Desliga em 15:00"
+    panel.toggle()
+    assert panel.player.playing
+    now[0] += 14 * 60
+    panel._tick()
+    assert panel.player.playing and panel.tools_status.text() == "Desliga em 1:00"
+    now[0] += 61
+    panel._tick()
+    assert not panel.player.playing
+    assert panel.sleep_combo.currentData() is None
+    assert panel.tools_status.text() == "Pausado pelo timer."
+
+
+def test_timer_para_no_fim_do_capitulo(panel, tmp_path):
+    from docaudio.ui.player_panel import END_OF_CHAPTER, Entry
+
+    path = write_wav(tmp_path / "livro.wav", 3.0)
+    panel.open_path(path)
+    panel.entries = [Entry("Um", path, 0.0), Entry("Dois", path, 1.0), Entry("Tres", path, 2.0)]
+    panel.player.seek(0.2)
+    panel.sleep_combo.setCurrentIndex(panel.sleep_combo.findData(END_OF_CHAPTER))
+    assert panel.tools_status.text() == "Desliga no fim do capítulo"
+    panel.player.seek(0.9)
+    panel._check_sleep(True)
+    assert panel.sleep_combo.currentData() == END_OF_CHAPTER  # ainda no primeiro capitulo
+    panel.player.seek(1.1)  # a reproducao passou para o capitulo seguinte
+    panel._check_sleep(True)
+    assert panel.player.position == pytest.approx(1.0, abs=0.05)  # pronto no inicio do capitulo dois
+    assert panel.sleep_combo.currentData() is None
+    assert panel.tools_status.text() == "Pausado no fim do capítulo."
+
+
+def test_mudar_de_capitulo_a_mao_rearma_o_fim_do_capitulo(panel, tmp_path):
+    from docaudio.ui.player_panel import END_OF_CHAPTER, Entry
+
+    path = write_wav(tmp_path / "livro.wav", 3.0)
+    panel.open_path(path)
+    panel.entries = [Entry("Um", path, 0.0), Entry("Dois", path, 1.0), Entry("Tres", path, 2.0)]
+    panel.sleep_combo.setCurrentIndex(panel.sleep_combo.findData(END_OF_CHAPTER))
+    panel.next_entry()
+    panel._check_sleep(True)
+    assert panel.sleep_combo.currentData() == END_OF_CHAPTER
+
+
+def test_fim_do_capitulo_numa_pasta_abre_o_proximo_sem_tocar(panel, tmp_path):
+    from docaudio.ui.player_panel import END_OF_CHAPTER
+
+    write_wav(tmp_path / "01 - um.wav", 0.3)
+    write_wav(tmp_path / "02 - dois.wav", 0.3)
+    panel.open_path(tmp_path)
+    panel.sleep_combo.setCurrentIndex(panel.sleep_combo.findData(END_OF_CHAPTER))
+    panel.toggle()
+    assert pump(panel, lambda: panel.player.info.path.name == "02 - dois.wav")
+    panel._tick()
+    assert not panel.player.playing
+    assert panel.sleep_combo.currentData() is None

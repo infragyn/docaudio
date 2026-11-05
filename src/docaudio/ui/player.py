@@ -92,6 +92,32 @@ def save_position(folder: Path, chapter: int, seconds: float) -> None:
     positions_file().write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def bookmarks_file() -> Path:
+    return paths.data_dir() / "marcadores_player.json"
+
+
+def load_bookmarks(file: Path) -> list[tuple[float, str]]:
+    """Marcadores de um arquivo de audio: (segundos, nome), em ordem."""
+    try:
+        data = json.loads(bookmarks_file().read_text(encoding="utf-8")).get(str(file), [])
+        return sorted((float(item["segundos"]), str(item.get("nome", ""))) for item in data)
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        return []
+
+
+def save_bookmarks(file: Path, marks: list[tuple[float, str]]) -> None:
+    try:
+        data = json.loads(bookmarks_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    if marks:
+        data[str(file)] = [{"segundos": round(seconds, 1), "nome": name} for seconds, name in sorted(marks)]
+    else:
+        data.pop(str(file), None)
+    bookmarks_file().parent.mkdir(parents=True, exist_ok=True)
+    bookmarks_file().write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def format_time(seconds: float) -> str:
     minutes, secs = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
