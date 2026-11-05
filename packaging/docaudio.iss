@@ -30,6 +30,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#AppExe}
 SetupLogging=yes
+; Mostra a AGPL antes de instalar; LICENSE e CREDITOS.md tambem vao para a pasta do programa.
+LicenseFile=..\LICENSE
 
 [Languages]
 Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"

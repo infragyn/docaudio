@@ -5,8 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "docaudio"
 version = "0.1.0"
-description = "Conversor local de documentos DOCX e PDF para audio em portugues brasileiro"
+description = "Converte documentos em audiolivros offline, com OCR, vozes em português, inglês e espanhol e tradução local"
 readme = "README.md"
+license = {text = "AGPL-3.0-or-later"}
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 requires-python = ">=3.11"
 dependencies = [
     "PySide6-Essentials>=6.7",

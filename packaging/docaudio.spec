@@ -63,3 +63,9 @@ exe = EXE(
     upx=False,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="DocAudio", upx=False)
+
+# Licenca e creditos ficam ao lado do .exe, para quem recebe o programa (AGPL).
+import shutil  # noqa: E402
+
+for name in ("LICENSE", "CREDITOS.md", "README.md"):
+    shutil.copy2(ROOT / name, Path(DISTPATH) / "DocAudio" / name)

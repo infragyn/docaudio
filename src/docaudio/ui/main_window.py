@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from docaudio import APP_NAME, __version__
+from docaudio import APP_NAME, LICENSE_NAME, SOURCE_URL, __version__
 from docaudio.core import dependencies, documents, paths
 from docaudio.core.conversion import Interrupted, find_interrupted, safe_filename
 from docaudio.core.language import AUTO as AUTO_LANGUAGE
@@ -1626,8 +1626,12 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             f"Sobre o {APP_NAME}",
-            f"{APP_NAME} {__version__}\n\nConverte documentos (DOCX, PDF, EPUB, PPTX, TXT e HTML) em áudio "
-            "em português brasileiro, com voz offline (Piper).",
+            f"{APP_NAME} {__version__}\n\nConverte documentos (PDF, DOCX, PPTX, EPUB, HTML e TXT) em áudio, "
+            "com OCR, vozes e tradução offline.\n\n"
+            f"Software livre sob a licença {LICENSE_NAME}, fornecido sem nenhuma garantia. "
+            "A licença (LICENSE) e os créditos de bibliotecas, vozes e modelos (CREDITOS.md) "
+            "acompanham o programa."
+            + (f"\n\nCódigo-fonte: {SOURCE_URL}" if SOURCE_URL else ""),
         )
 
     def closeEvent(self, event) -> None:
